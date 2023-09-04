@@ -1,0 +1,352 @@
+---
+title: "Homework 1"
+author: "Cathy Zhuang"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    number_sections: true
+  
+---
+
+**Due September 13, 2023, prior to 1:30 PM. Assignments are to be submitted via Canvas.**
+
+
+**You may discuss the homework problems and computing issues with other students in the class and submit questions to the Canvas discussion board. However, you must write up your homework solution on your own. In particular, do not share your R files with other students. Please list the students you worked with below:**
+
+Students worked with: 
+-ChatGPT for some R code help
+
+
+
+Lectures: Module 1  
+
+Objectives:  
+
+1.	Familiarize yourself with R, which will be used throughout BIOS 526.  Also make good use of the R help files when learning new commands.
+2.	Review concepts from linear regression and multiple linear regression.
+3.  Start working with observations that are not independent.
+4.  Evaluate the influence of omitted variables on an analysis.
+5.  Interpret interaction effects. 
+
+# Problem 1. 
+
+We will be using a dataset from a study on the impacts of image acquisition method on measures of brain activity. FMRI is a non-invasive technique that can be used to measure brain activity across time. Resting-state fMRI is acquired while a participant stares at a crosshair and performs no specific task. Nine 6-min rs-fMRI scans were collected on 32 healthy young adults. Scans differed by their "multiband factor," which is a technique that allows more time points to be collected in the same amount of time. Although more data is collected, the data may be noisier. The data measures activity between two brain regions: one is located in the left thalamus and the other in the right thalamus. The thalamus relays information between brain regions. 
+
+We will examine whether brain activity differs when measured using two acquisitions: SB.3.3 and MB.4. SB.3.3.mm is a single-band acquisition with larger voxels, and similar acquisitions were used in most studies prior to around 2016. MB4 is an accelerated sequence that collects more data in the same amount of time, and in this study, used a 2 mm acquisition. We collected these data in my lab, and the paper is available [here](https://www.sciencedirect.com/science/article/pii/S1053811921002421).
+
+We will focus on the following variables:
+
+`id` is subject ID. 
+
+`zcor` is the measure of brain activity (a Fisher z-fransformed correlation)
+
+`Acquisition` is the scan used to acquire the data. 
+
+The data are in the "long" format. 
+
+
+##
+<!-- 1.-->
+First, use the `lm()` function to compare the mean brain activity in SB.3.3.mm to MB.4, and print the output of `summary()`. No need to interpret the results yet. You can use the code below to subset to these two acquisitions. 
+
+```{r}
+# set the working directory
+setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data")
+# read in the dataset
+mbdata = read.csv("thalamus_mb_selected.csv")
+# subset the dataset
+mbdata_sel = mbdata[mbdata$Acquisition %in% c("SB.3.3.mm","MB.4"),c("id","Acquisition","zcor")]
+
+# Fit a linear regression model and print the summary
+lm_model = lm(zcor ~ Acquisition, data = mbdata_sel)
+summary(lm_model)
+```
+
+
+##
+<!-- 2.-->
+Now check model diagnostics using `plot()`. Describe each of the four plots and any issues.
+
+In the residuals vs. fitted plot, the differences between observed and predicted values (aka the residuals) are plotted on the y-axis and the predicted values(fitted values) are plotted on the x-axis. Besides the two clusters (which makes sense because we are using categorical data and we have two categories), it seems like the points are scattered, indicating that there may be no non-linearity or heteroskedasticity.
+
+In the normal QQ plot, we are comparing the distribution of residuals to the normal distribution. The points here generally follow a straight line but deviate slightly at the edges, indicating that there may be some deviation from normality in the residuals.
+
+In the scale-location plot, the square root of the standardized residuals are plotted on the y axis, and the fitted values are plotted on the x-axis. The spread seems about constant, so we can likely assume homoskedasticity.
+
+In the leverage plot, the standardized residuals are plotted on the y axis and category is plotted on the x axis. Points with high leverage are indicated (observations 25, 77, and 258)???
+
+```{r}
+# Check model diagnostics using plot()
+plot(lm_model)
+```
+
+
+##
+<!-- 3.-->
+Based on what we know about the data, are there any other model assumptions that may be violated?
+
+This is paired data, so the results will depend on the subject. 
+ 
+
+##
+<!-- 4.-->
+Next we will use a t-test to compare SB.3.3.mm and MB.4. It is helpful to reshape the data into "wide" format. 
+```{r}
+library(tidyr)
+mbdata_sel_wide = mbdata_sel %>% pivot_wider(names_from = Acquisition, values_from = zcor)
+```
+Conduct a t-test using `t.test()`. For this problem, use `paired=FALSE` and `var.equal=TRUE`. How do the estimates, t-statistic, and p-value compare to `lm()`?
+
+The estimates, t-statistic, and p-value are equivalent to the lm summary.
+```{r}
+# T-test
+ttest_result = t.test(mbdata_sel_wide$`SB.3.3.mm`, mbdata_sel_wide$MB.4, paired = FALSE, var.equal = TRUE)
+ttest_result
+```
+
+
+
+##
+<!-- 5.-->
+Next, conduct the t-test but with `var.equal=FALSE` (keep `paired=FALSE` for now). How does the estimate, t-statistic, degrees of freedom, and p-value compare to the previous problem?
+
+The estimate and t-statistic are the same, but the df, p-value, and 95% CI are different. The p-value is slightly larger, df slightly smaller, and 95% CI slightly wider.
+```{r}
+# T-test with var.equal=FALSE
+ttest_result_unequal_var = t.test(mbdata_sel_wide$`SB.3.3.mm`, mbdata_sel_wide$MB.4, paired = FALSE, var.equal = FALSE)
+ttest_result_unequal_var
+```
+
+
+##
+<!-- 6.-->
+Next, conduct a paired t test. Print the output (no interpretation necessary). 
+```{r}
+# Paired t-test
+paired_ttest_result = t.test(mbdata_sel_wide$`SB.3.3.mm`, mbdata_sel_wide$MB.4, paired = TRUE)
+paired_ttest_result
+```
+
+
+##
+<!-- 7.-->
+How do the estimates, t-statistics, degrees of freedom, and p values compare in the paired and unpaired versions? (Compare the paired t.test to the t.test with `paired=FALSE` and `var.equal=FALSE` from the previous problem.)
+
+The estimate for the paired version is slightly larger, the t-statistic is larger, the df is smaller, and the p-value is smaller.
+
+##
+<!-- 8.-->
+Now create a new variable that subtracts SB.3.3.mm from MB.4, and then conduct a one-sample t-test to test whether the mean of the differences differs from zero. How does this compare to the paired t test?
+
+The results are the same as the paired t test.
+```{r}
+# Create a new variable that subtracts SB.3.3.mm from MB.4
+differences <- mbdata_sel_wide$MB.4 - mbdata_sel_wide$`SB.3.3.mm`
+
+# one sample t test
+one_sample_ttest_result <- t.test(differences, mu = 0)
+one_sample_ttest_result
+```
+
+
+
+
+##
+<!-- 9.-->
+Calculate the sample covariance between MB.4 and SB.3.3.mm using the R function `cov()`. Hint: specify the `complete.obs` option (see `?cov`).
+```{r}
+# Calculate the sample covariance between MB.4 and SB.3.3.mm
+sample_covariance <- cov(mbdata_sel_wide$MB.4, mbdata_sel_wide$`SB.3.3.mm`, use = "complete.obs")
+sample_covariance
+
+```
+
+##
+<!-- 10.-->
+Now calculate the standard error of the paired t-test using the variance of MB.4, SB.3.3.mm, and their covariance. Do this using the R functions `var()` as well as `cov()`. Check that your value matches the SE output by the paired t-test, which can be viewed using `t.test()$stderr`.  (Use the discussion board if you have issues or questions.) Does the covariance increase or decrease the test statistic? Hint: subset to complete observations before doing this, e.g., `mydata[complete.cases(mydata),]`
+
+The SEs are the same.
+```{r}
+# Subset to complete observations
+complete_data <- mbdata_sel_wide[complete.cases(mbdata_sel_wide$MB.4, mbdata_sel_wide$`SB.3.3.mm`), ]
+
+# SE from variance and covariance
+variance_MB4 <- var(complete_data$MB.4)
+variance_SB3 <- var(complete_data$`SB.3.3.mm`)
+covariance <- cov(complete_data$MB.4, complete_data$`SB.3.3.mm`)
+n <- nrow(complete_data)
+standard_error <- sqrt((variance_MB4 / n) + (variance_SB3 / n) - (2 * covariance / n))
+standard_error
+
+# SE from t.test()
+paired_ttest_result <- t.test(complete_data$MB.4, complete_data$`SB.3.3.mm`, paired = TRUE)
+ttest_standard_error <- paired_ttest_result$stderr
+ttest_standard_error
+
+```
+
+
+
+
+
+##
+<!-- 11.-->
+How does brain activity in the thalamus measured using the multiband 4 with 2 mm resolution compare to single band with 3.3 mm resolution?  State your null hypothesis, report the p value and state your conclusion, along with your chosen $\alpha$-level. 
+
+H0: Brain activity in the thalamus measured using the multiband 4 with 2 mm resolution is the same as brain activity measured using the single band with 3.3 mm resolution.
+H1: Brain activity in the thalamus measured using the multiband 4 with 2 mm resolution is NOT the same as brain activity measured using the single band with 3.3 mm resolution.
+
+Estimate: Difference of 0.328261 
+Significance level (alpha) = 0.05
+P-value = 1.862e-05
+Decision: Reject the null hypothesis
+
+Conclusion: Brain activity in the thalamus measured using the multiband 4 with 2 mm resolution is NOT the same as brain activity measured using the single band with 3.3 mm resolution.
+
+
+
+# Problem 2.
+
+Dataset: parkinsons.csv
+
+In this problem, we will examine whether dysphonia, or abnormal speech sounds, are related to Parkinson's disease severity. This dataset was obtained from https://data.world/uci/parkinsons-telemonitoring/. The response variable we will examine is `motor_UPDRS` (motor Unified Parkinson's Disease Rating Scale). The scientific question is whether Parkinson's severity can be monitored using features derived from speech recordings, which can be collected by telephone. The gold standard for monitoring disease progression, the UPDRS, is administered in a clinic, and hence is costly and burdensome. 
+
+There are nearly 6000 observations in this dataset, which are collected on 42 subjects.
+
+
+##
+<!-- 1.-->
+First, we will examine a "fixed effects" model that has a separate intercept for every subject. We will learn more about these in Module 2. We will be revisiting this dataset in future homeworks to improve our modeling. Fit a linear model for `motor_UPDRS` with the terms `subject` (as a factor), `age`, and `sex`. What are the coefficients for `age` and `sex`? Did R produce any errors, warnings, or other notable output? (Hint: look at the output carefully.)
+
+Age and Sex were not estimated, everything for them is NA.
+
+```{r}
+setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data")
+parkinsons_data <- read.csv("parkinsons.csv")
+
+# convert subject to factor
+parkinsons_data$subject <- as.factor(parkinsons_data$subject)
+
+# fixed effects - separate intercept for every subject
+parkinsons_model <- lm(motor_UPDRS ~ subject + age + sex, data = parkinsons_data)
+summary(parkinsons_model)
+
+```
+
+
+
+##
+<!-- 2.-->
+Why were coefficients for `age` and `sex` not estimated? Mathematically, what can we say about the columns of the design matrix?
+
+Age and sex were not estimated because they are correlated with the subjects (since the age and sex info comes from the subject). Therefore, there is multicollinearity. 
+
+Mathematically, the columns of the design matrix will be populated with the subjects. So column 2 is subject 1, and column 3 is subject 2, and so on.
+
+##
+<!-- 3.-->
+Drop `age` and `sex` from the model, and fit the model with all dysphonia predictors and subject (as a factor). DO NOT INCLUDE `total_UPDRS`. Calculate the VIFs. Hint: you can use the shorthand `motor_UPDRS~.-age-sex-total_UPDRS` to include all variables in the dataset except those with the minus sign. Is multicollinearity an issue? 
+
+Yes, multicollinearity is an issue. There are some very large VIFs.
+```{r}
+library(car)
+lm_model <- lm(motor_UPDRS ~ . - age - sex - total_UPDRS, data = parkinsons_data)
+
+# VIFs
+vif_values <- car::vif(lm_model)
+vif_values
+```
+
+
+##
+<!-- 4.-->
+We will restrict the analysis to a few variables. In the following, we will use the variables `age`, `sex`, `Jitter_Percent`, `Shimmer`, `NHR`, and `PPE`. Fit the model with these predictors. Check their VIFs. Are there issues with multicollinearity? 
+
+No VIFs alone are greater than 10 (the rule of thumb), but some VIFs are still somewhat high, like Jitter_Percent and NHR,  which are both >4.
+```{r}
+selected_predictors_model <- lm(motor_UPDRS ~ age + sex + Jitter_Percent + Shimmer + NHR + PPE, data = parkinsons_data)
+
+vif_selected <- car::vif(selected_predictors_model)
+vif_selected
+```
+
+
+##
+<!-- 5.-->
+Without looking at the diagnostic plots, which of the assumptions of linear regression is (or are) violated?
+????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+
+
+##
+<!-- 6.-->
+Perform model diagnostics using `plot()`. Summarize your interpretation of each of the four plots and whether there are any concerns.
+
+In the residuals vs. fitted plot, the differences between observed and predicted values (aka the residuals) are plotted on the y-axis and the predicted values(fitted values) are plotted on the x-axis. It seems like the points are scattered, indicating that there may be no non-linearity or heteroskedasticity.
+
+In the normal QQ plot, we are comparing the distribution of residuals to the normal distribution. The points here deviate at the edges, indicating that there may be some deviation from normality in the residuals.
+
+In the scale-location plot, the square root of the standardized residuals are plotted on the y axis, and the fitted values are plotted on the x-axis. The spread seems about constant, so we can likely assume homoskedasticity.
+
+In the leverage plot, the standardized residuals are plotted on the y axis and leverage is plotted on the x axis. Points with high leverage are indicated???????????????????????????????????????????
+```{r}
+plot(selected_predictors_model)
+```
+
+
+
+##
+<!-- 7.-->
+Fit the model without `age`. Does the coefficient of NHR change? Calculate $(\beta_{no-age} - \beta_{no-age})/\beta_{crude}$. Here, $\beta_{no-age}$ is the slope of NHR in the model without `age`. Is there evidence of omitted variable bias?
+
+The coefficient of NHR changes by around 72%. Thus, there is evidence of omitted variable bias, since age may have been a confounder that affected the relationship between NHR and motor_UPDRS.
+```{r}
+# model without 'age'
+model_no_age <- lm(motor_UPDRS ~ sex + Jitter_Percent + Shimmer + NHR + PPE, data = parkinsons_data)
+
+beta_no_age <- coef(model_no_age)["NHR"] # reduced model NHR
+beta_crude <- coef(selected_predictors_model)["NHR"] # original model NHR
+
+# pct change
+percent_change <- ((beta_no_age - beta_crude) / beta_crude) * 100
+percent_change
+```
+
+
+
+##
+<!-- 8.-->
+Look at the interaction between `NHR` and `age`. Does `age` modify the relationship between `NHR` and `motor_UPDRS`?
+
+Yes, age modifies the relationship between NHR and motor_UPDRS in a way where if age increases, the effect of NHR on motor_UPDRS decreases. The interaction coefficient is statistically significant at alpha = 0.05.
+```{r}
+# Fit the model with the interaction term between NHR and age
+model_interaction <- lm(motor_UPDRS ~ age * NHR + sex + Jitter_Percent + Shimmer + PPE, data = parkinsons_data)
+summary(model_interaction)
+
+```
+
+
+
+##
+<!-- 9.-->
+Interpret the slope of `NHR` in the model including `age*NHR`. Is this biologically reasonable?
+
+The change in expected motor_UPDRS for a one-unit increase in NHR, holding all other variables constant, and age being 1, is 134.66364-1.96831 = 132.69533.??????????????????????????????????????????????????????????????????????????
+
+
+##
+<!-- 10.-->
+Refit the model with `age` centered. Interpret the slope of `NHR`.
+
+The change in expected motor_UPDRS for a one-unit increase in NHR, holding all other variables constant, and age being the average age, is 7.10765-1.96831 = 5.13934.
+```{r}
+# age centered
+mean_age <- mean(parkinsons_data$age)
+parkinsons_data$age_centered <- parkinsons_data$age - mean_age
+
+# refit model
+model_centered_age <- lm(motor_UPDRS ~ age_centered * NHR + sex + Jitter_Percent + Shimmer + PPE, data = parkinsons_data)
+summary(model_centered_age)
+
+```
+

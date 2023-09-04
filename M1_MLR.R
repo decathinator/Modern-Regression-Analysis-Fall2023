@@ -5,8 +5,8 @@
 
 # Datasets used in lectures and assignments are on Canvas/Data
 
-
-dat = read.csv ("Data/testscore.csv")
+setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data")
+dat = read.csv ("testscore.csv")
 
 # Examine structure of dataset:
 str(dat)
