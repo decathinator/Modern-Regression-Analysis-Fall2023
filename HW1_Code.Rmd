@@ -15,6 +15,7 @@ output:
 
 Students worked with: 
 -ChatGPT for some R code help
+-Lauren, Megan, Carissa, Jess, Chiara, Alli, Sarah, Nicholas
 
 
 
@@ -67,13 +68,13 @@ summary(lm_model)
 <!-- 2.-->
 Now check model diagnostics using `plot()`. Describe each of the four plots and any issues.
 
-In the residuals vs. fitted plot, the differences between observed and predicted values (aka the residuals) are plotted on the y-axis and the predicted values(fitted values) are plotted on the x-axis. Besides the two clusters (which makes sense because we are using categorical data and we have two categories), it seems like the points are scattered, indicating that there may be no non-linearity or heteroskedasticity.
+In the residuals vs. fitted plot, the differences between observed and predicted values (aka the residuals) are plotted on the y-axis and the predicted values(fitted values) are plotted on the x-axis. Besides the two clusters (which makes sense because we are using categorical data and we have two categories), it seems like the points are scattered, and the line is relatively flat, indicating that there may be no non-linearity.
 
-In the normal QQ plot, we are comparing the distribution of residuals to the normal distribution. The points here generally follow a straight line but deviate slightly at the edges, indicating that there may be some deviation from normality in the residuals.
+In the normal QQ plot, we are comparing the distribution of residuals to the normal distribution. The points here generally follow a straight line but deviate slightly at the tails, indicating that there may be some deviation from normality in the residuals.
 
-In the scale-location plot, the square root of the standardized residuals are plotted on the y axis, and the fitted values are plotted on the x-axis. The spread seems about constant, so we can likely assume homoskedasticity.
+In the scale-location plot, the square root of the standardized residuals are plotted on the y axis, and the fitted values are plotted on the x-axis. There is a slight increase in slope, meaning that there may not be constant variance.
 
-In the leverage plot, the standardized residuals are plotted on the y axis and category is plotted on the x axis. Points with high leverage are indicated (observations 25, 77, and 258)???
+In the leverage plot, the standardized residuals are plotted on the y axis and category is plotted on the x axis. Points that are potentially problematic are indicated (observations 25, 77, and 258). However, these points do not seem to be over the Cooks distance threshold. Leverage is approximately the same across the categories.
 
 ```{r}
 # Check model diagnostics using plot()
@@ -85,7 +86,7 @@ plot(lm_model)
 <!-- 3.-->
 Based on what we know about the data, are there any other model assumptions that may be violated?
 
-This is paired data, so the results will depend on the subject. 
+In addition to the potential violations above, out data is paired data, so the results will depend on the subject. This means that independence is violated. 
  
 
 ##
@@ -97,14 +98,13 @@ mbdata_sel_wide = mbdata_sel %>% pivot_wider(names_from = Acquisition, values_fr
 ```
 Conduct a t-test using `t.test()`. For this problem, use `paired=FALSE` and `var.equal=TRUE`. How do the estimates, t-statistic, and p-value compare to `lm()`?
 
-The estimates, t-statistic, and p-value are equivalent to the lm summary.
+The estimates, t-statistic, and p-value of the t.test are equivalent to the lm summary. 
+
 ```{r}
 # T-test
 ttest_result = t.test(mbdata_sel_wide$`SB.3.3.mm`, mbdata_sel_wide$MB.4, paired = FALSE, var.equal = TRUE)
 ttest_result
 ```
-
-
 
 ##
 <!-- 5.-->
@@ -138,7 +138,7 @@ The estimate for the paired version is slightly larger, the t-statistic is large
 <!-- 8.-->
 Now create a new variable that subtracts SB.3.3.mm from MB.4, and then conduct a one-sample t-test to test whether the mean of the differences differs from zero. How does this compare to the paired t test?
 
-The results are the same as the paired t test.
+The results are the same as the paired t test. The absolute value of the mean of the one sample t-test is equivalent to the estimate of the mean difference for the paired.
 ```{r}
 # Create a new variable that subtracts SB.3.3.mm from MB.4
 differences <- mbdata_sel_wide$MB.4 - mbdata_sel_wide$`SB.3.3.mm`
@@ -165,7 +165,7 @@ sample_covariance
 <!-- 10.-->
 Now calculate the standard error of the paired t-test using the variance of MB.4, SB.3.3.mm, and their covariance. Do this using the R functions `var()` as well as `cov()`. Check that your value matches the SE output by the paired t-test, which can be viewed using `t.test()$stderr`.  (Use the discussion board if you have issues or questions.) Does the covariance increase or decrease the test statistic? Hint: subset to complete observations before doing this, e.g., `mydata[complete.cases(mydata),]`
 
-The SEs are the same.
+The SEs are the same. The covariance increases our test statistic because higher covariance makes it seem like there's a stronger association than there is (with higher covariance, standard error decreases, which can make the test statistic increase).
 ```{r}
 # Subset to complete observations
 complete_data <- mbdata_sel_wide[complete.cases(mbdata_sel_wide$MB.4, mbdata_sel_wide$`SB.3.3.mm`), ]
@@ -201,7 +201,7 @@ Significance level (alpha) = 0.05
 P-value = 1.862e-05
 Decision: Reject the null hypothesis
 
-Conclusion: Brain activity in the thalamus measured using the multiband 4 with 2 mm resolution is NOT the same as brain activity measured using the single band with 3.3 mm resolution.
+Conclusion: There is sufficient evidence to show that brain activity in the thalamus measured using the multiband 4 with 2 mm resolution is NOT the same as brain activity measured using the single band with 3.3 mm resolution.
 
 
 
@@ -219,6 +219,7 @@ There are nearly 6000 observations in this dataset, which are collected on 42 su
 First, we will examine a "fixed effects" model that has a separate intercept for every subject. We will learn more about these in Module 2. We will be revisiting this dataset in future homeworks to improve our modeling. Fit a linear model for `motor_UPDRS` with the terms `subject` (as a factor), `age`, and `sex`. What are the coefficients for `age` and `sex`? Did R produce any errors, warnings, or other notable output? (Hint: look at the output carefully.)
 
 Age and Sex were not estimated, everything for them is NA.
+Notable output: "Coefficients: (2 not defined because of singularities)"
 
 ```{r}
 setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data")
@@ -239,15 +240,13 @@ summary(parkinsons_model)
 <!-- 2.-->
 Why were coefficients for `age` and `sex` not estimated? Mathematically, what can we say about the columns of the design matrix?
 
-Age and sex were not estimated because they are correlated with the subjects (since the age and sex info comes from the subject). Therefore, there is multicollinearity. 
-
-Mathematically, the columns of the design matrix will be populated with the subjects. So column 2 is subject 1, and column 3 is subject 2, and so on.
+Age and sex were not estimated because they are correlated with the subjects (since the age and sex info comes from the subject). The columns of the design matrix are thus dependent on each other. Therefore, there is multicollinearity. 
 
 ##
 <!-- 3.-->
 Drop `age` and `sex` from the model, and fit the model with all dysphonia predictors and subject (as a factor). DO NOT INCLUDE `total_UPDRS`. Calculate the VIFs. Hint: you can use the shorthand `motor_UPDRS~.-age-sex-total_UPDRS` to include all variables in the dataset except those with the minus sign. Is multicollinearity an issue? 
 
-Yes, multicollinearity is an issue. There are some very large VIFs.
+Yes, multicollinearity is an issue. There are some very large VIFs. Using a threshold of 10 for VIFs, there are still large VIFs.
 ```{r}
 library(car)
 lm_model <- lm(motor_UPDRS ~ . - age - sex - total_UPDRS, data = parkinsons_data)
@@ -262,7 +261,7 @@ vif_values
 <!-- 4.-->
 We will restrict the analysis to a few variables. In the following, we will use the variables `age`, `sex`, `Jitter_Percent`, `Shimmer`, `NHR`, and `PPE`. Fit the model with these predictors. Check their VIFs. Are there issues with multicollinearity? 
 
-No VIFs alone are greater than 10 (the rule of thumb), but some VIFs are still somewhat high, like Jitter_Percent and NHR,  which are both >4.
+No VIFs alone are greater than 10 (the rule of thumb), but some VIFs are still somewhat high, like Jitter_Percent and NHR,  which are both >4. Using the threshold of 10, there should not be any issues with multicollinearity.
 ```{r}
 selected_predictors_model <- lm(motor_UPDRS ~ age + sex + Jitter_Percent + Shimmer + NHR + PPE, data = parkinsons_data)
 
@@ -274,20 +273,21 @@ vif_selected
 ##
 <!-- 5.-->
 Without looking at the diagnostic plots, which of the assumptions of linear regression is (or are) violated?
-????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+
+Independence -> some samples come from same subject, so the samples are not independent
 
 
 ##
 <!-- 6.-->
 Perform model diagnostics using `plot()`. Summarize your interpretation of each of the four plots and whether there are any concerns.
 
-In the residuals vs. fitted plot, the differences between observed and predicted values (aka the residuals) are plotted on the y-axis and the predicted values(fitted values) are plotted on the x-axis. It seems like the points are scattered, indicating that there may be no non-linearity or heteroskedasticity.
+In the residuals vs. fitted plot, the differences between observed and predicted values (aka the residuals) are plotted on the y-axis and the predicted values(fitted values) are plotted on the x-axis. It seems like the points have some little clusters, which may mean that linearity is violated because the LOESS line is also curved.
 
 In the normal QQ plot, we are comparing the distribution of residuals to the normal distribution. The points here deviate at the edges, indicating that there may be some deviation from normality in the residuals.
 
-In the scale-location plot, the square root of the standardized residuals are plotted on the y axis, and the fitted values are plotted on the x-axis. The spread seems about constant, so we can likely assume homoskedasticity.
+In the scale-location plot, the square root of the standardized residuals are plotted on the y axis, and the fitted values are plotted on the x-axis. The spread seems about constant and the line is about flat, so we can likely assume homoskedasticity/constant variance.
 
-In the leverage plot, the standardized residuals are plotted on the y axis and leverage is plotted on the x axis. Points with high leverage are indicated???????????????????????????????????????????
+In the leverage plot, the standardized residuals are plotted on the y axis and leverage is plotted on the x axis. Points with high leverage are indicated (4064, 4107, 1881).
 ```{r}
 plot(selected_predictors_model)
 ```
@@ -298,7 +298,7 @@ plot(selected_predictors_model)
 <!-- 7.-->
 Fit the model without `age`. Does the coefficient of NHR change? Calculate $(\beta_{no-age} - \beta_{no-age})/\beta_{crude}$. Here, $\beta_{no-age}$ is the slope of NHR in the model without `age`. Is there evidence of omitted variable bias?
 
-The coefficient of NHR changes by around 72%. Thus, there is evidence of omitted variable bias, since age may have been a confounder that affected the relationship between NHR and motor_UPDRS.
+The coefficient of NHR changes by around 260% decrease. Thus, there is evidence of omitted variable bias, since age may affect the relationship between NHR and motor_UPDRS.
 ```{r}
 # model without 'age'
 model_no_age <- lm(motor_UPDRS ~ sex + Jitter_Percent + Shimmer + NHR + PPE, data = parkinsons_data)
@@ -307,7 +307,7 @@ beta_no_age <- coef(model_no_age)["NHR"] # reduced model NHR
 beta_crude <- coef(selected_predictors_model)["NHR"] # original model NHR
 
 # pct change
-percent_change <- ((beta_no_age - beta_crude) / beta_crude) * 100
+percent_change <- ((beta_no_age - beta_crude) / beta_no_age) * 100
 percent_change
 ```
 
@@ -317,7 +317,7 @@ percent_change
 <!-- 8.-->
 Look at the interaction between `NHR` and `age`. Does `age` modify the relationship between `NHR` and `motor_UPDRS`?
 
-Yes, age modifies the relationship between NHR and motor_UPDRS in a way where if age increases, the effect of NHR on motor_UPDRS decreases. The interaction coefficient is statistically significant at alpha = 0.05.
+Yes, age modifies the relationship between NHR and motor_UPDRS. The interaction coefficient is statistically significant at alpha = 0.05.
 ```{r}
 # Fit the model with the interaction term between NHR and age
 model_interaction <- lm(motor_UPDRS ~ age * NHR + sex + Jitter_Percent + Shimmer + PPE, data = parkinsons_data)
@@ -331,14 +331,15 @@ summary(model_interaction)
 <!-- 9.-->
 Interpret the slope of `NHR` in the model including `age*NHR`. Is this biologically reasonable?
 
-The change in expected motor_UPDRS for a one-unit increase in NHR, holding all other variables constant, and age being 1, is 134.66364-1.96831 = 132.69533.??????????????????????????????????????????????????????????????????????????
+Using previous model:
+The change in expected motor_UPDRS for a one-unit increase in NHR, holding all other variables constant, and age being 0, is 134.66364. Since it is not biologically plausible for a subject to be 0 years old, this is not biologically reasonable.
 
 
 ##
 <!-- 10.-->
 Refit the model with `age` centered. Interpret the slope of `NHR`.
 
-The change in expected motor_UPDRS for a one-unit increase in NHR, holding all other variables constant, and age being the average age, is 7.10765-1.96831 = 5.13934.
+The change in expected motor_UPDRS for a one-unit increase in NHR, holding all other variables constant, and age being the average age, is 7.10765. This estimate is not statistically significant at alpha=0.05.
 ```{r}
 # age centered
 mean_age <- mean(parkinsons_data$age)
