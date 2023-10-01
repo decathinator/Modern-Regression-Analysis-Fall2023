@@ -1,0 +1,436 @@
+---
+title: "Homework 2"
+
+author: "Cathy Zhuang"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+**Due October 2 prior to 1:30 PM. Assignments are to be submitted via Canvas.**
+
+
+**You may discuss the homework problems and computing issues with other students in the class and submit questions to the Canvas discussion board. However, you must write up your homework solution on your own. In particular, do not share your R files with other students. Please list the students you worked with below:**
+
+Students worked with: Same as last time + Yanru and Weiwei
+
+
+### Lectures: Module 2  
+
+### Objectives:  
+
+1.	Learn more about ICC.
+2. Fit and interpret a mixed model with random intercepts.
+3.	Fit and interpret a mixed model with random slopes.
+4.  Understand the importance of incorporating correlation between observations into your models.
+
+# Problem 1. 
+
+Dataset: thalamus_mb_selected.csv
+
+We will continue to examine whether measures of brain activity differ between acquisition sequences. The acquisitions all purport to measure the same thing, i.e., neural activity, and in this sense should not differ. 
+
+Last time we used `%in%` to subset to SB.3.3.mm and MB.4. This time we will use `dplyr::filter`:
+```{r}
+setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data")
+mbdata = read.csv("thalamus_mb_selected.csv")
+library('dplyr')
+mbdata_sel = mbdata %>% select(c("id","Acquisition","zcor")) %>% filter(Acquisition%in%c('SB.3.3.mm','MB.4'))
+```
+
+**1.** ICC is used in reproducibility studies. Calculate ICC of `zcor` using the original definition. The original definition is defined similar to Pearson's correlation but uses a shared mean: 
+$$ \frac{1}{n}\sum_{i=1}^n((y_{i1} - \bar{y}_{\cdot \cdot})(y_{i2}-\bar{y}_{\cdot \cdot})/var(y_{ij}),$$
+where $y_{\cdot \cdot} = \frac{1}{2n} \sum_{i=1}^n \sum_{j=1}^2 y_{ij}$ and $var(y_{ij})=\sum_{i=1}^n \sum_{j=1}^2 (y_{ij} - \bar{y}_{\cdot \cdot})^2/(2n)$. Here, $j=1$ corresponds to SB.3.3.mm and $j=2$ corresponds to MB.4. In order to do this, if a subject is missing `zcor` for SB.3.3.mm or MB.4, remove that subject from the calculation 
+
+```{r}
+# if a subject is missing `zcor` for SB.3.3.mm or MB.4, remove that subject from the calculation 
+mbdata_sel2 <- mbdata_sel # for future use for q's where u need all the subjects
+
+mbdata_sel <- mbdata_sel %>%
+  group_by(id) %>%
+  filter(!any(is.na(zcor)))
+
+n = length(unique(mbdata_sel$id))
+
+yij_mean = mean(mbdata_sel$zcor, na.rm=T)
+var_yij = sum((mbdata_sel$zcor - yij_mean)^2) / (2 * n)
+
+icc = (1 / n) * sum((mbdata_sel$zcor[mbdata_sel$Acquisition == 'SB.3.3.mm'] - yij_mean) *
+                   (mbdata_sel$zcor[mbdata_sel$Acquisition == 'MB.4'] - yij_mean) / var_yij)
+
+icc
+```
+
+**2.** Next, fit a random intercept model to the data including all subjects. Do not include any covariates, and use the default REML fitting. Print the output of `summary()`.
+
+```{r}
+library(lmerTest)
+random_intercept_model <- lmer(zcor ~ 1 + (1 | id), data = mbdata_sel2)
+summary(random_intercept_model)
+```
+
+
+**3.** Calculate the mixed model formulation of ICC. This more modern approach allows the use of participants that may be missing a first or second scan. Then based on the guidelines for reproducibility below, how is the reproducibility of brain activity between the two acquisitions?
+
+Less than 0.40—poor.
+
+Between 0.40 and 0.59—fair.
+
+Between 0.60 and 0.74—good.
+
+Between 0.75 and 1.00—excellent.
+
+The ICC is 0 which means that, based on the guidelines, the reproducibility of brain activity between the two acquisitions is poor.
+```{r}
+0 / (0 + 0.1003)
+```
+
+
+**4.** Next, fit a linear mixed model with outcome `zcor` and a fixed effect `Acquisition` and a random intercept for `id`  on the SB.3.3.mm and MB.4 data. Print `summary()` and include the p-values. 
+
+```{r}
+mixed_model2 <- lmer(zcor ~ Acquisition + (1 | id), data = mbdata_sel2)
+summary(mixed_model2)
+```
+
+
+
+**5.** Write the model for problem 4. R markdown can use "latex" (pronounced lay-tek) notation to create Greek letters. If you are compiling your homework in html, you may be able to compile this without installing additional software. If you encounter issues, you can try typing `tinytex::install_tinytex()` in the R Console. There are examples above in problem 1. Here is another example:
+$$y_i = \beta_0 + \beta_1 x_i + \epsilon_i$$
+$$\epsilon_i \overset{iid}{\sim} N(0,\sigma^2).$$
+Make sure to use two indices when appropriate, e.g., $y_{ij}$.  Use $\tau^2$ for the random intercept variance. (Note: use a single dollar sign for in-line equations, and two dollars signs for an equation on a new line, see this R markdown file.) Define all notation.
+
+The model for probelm 4 is:
+$$y_{ij} = \mu + \theta_i + x_{ij}' Acquisition + \epsilon_{ij}$$
+where j=1 if the acquisition is "SB.3.3.mm" and 0 if it is "MB.4".
+
+$y_{ij}$ is the outcome zcor for subject i and acquisition j.
+
+$\mu$ is the overall intercept or the overall  mean of zcor when all $x_{ij}=0$.
+
+$\theta_i$ is the subject specific difference from the overall mean of zcor. It is IID with $N(0, \tau^2)$ with $\tau^2$ representing between-group variability in the intercepts.
+
+$x_{ij}'$ is the vector of predictors where i is the subject and j is the acquisition.
+
+$Acquisition$ is the coefficient vector for Acquisition, it does not vary between subjects.
+
+$\epsilon_{ij}$ is the error for zcor for subject i at acquisition j. It is IID with $N(0, \sigma^2)$ with $\sigma^2$ representing within-group variability in the residuals.
+
+Additionally, $\theta_i$  and $\epsilon_{ij}$ are independent of one another.
+
+**6.** Re-calculate the paired t-test from HW1 and compare the t-statistic and p-value to the mixed model. Are they the same? 
+
+
+t = 5.1113
+p-value = 1.862e-05
+
+The t-statistic and p-value from the mixed model is not the same as the t-statistic and p-value of the paired t-test. The t-statistic for the paired t-test is larger, and the p-value for the paired test is smaller.
+
+```{r}
+library(tidyr)
+
+# subset the dataset
+mbdata_sel_wide = mbdata_sel2[mbdata_sel2$Acquisition %in% c("SB.3.3.mm","MB.4"),c("id","Acquisition","zcor")] %>% pivot_wider(names_from = Acquisition, values_from = zcor)
+
+# Paired t-test
+paired_ttest_result = t.test(mbdata_sel_wide$`SB.3.3.mm`, mbdata_sel_wide$MB.4, paired = TRUE)
+paired_ttest_result
+```
+
+
+**7.** If any of the subjects are missing `zcor` for SB.3.3.mm or MB.4, remove that subject from the dataset. Refit the lmm. How does the t-statistic and p-value compare to the paired t-test? (Note that an advantage of the more modern mixed models is that they can handle subjects that have partially missing data.)
+
+
+t-statistic: 5.111 
+
+p-value: 1.86e-05 ***
+
+t-statistic and p-value are the same as the paired t-test.
+
+```{r}
+linear_mixed_model <- lmer(zcor ~ Acquisition + (1 | id), data = mbdata_sel)
+summary(linear_mixed_model)
+```
+
+
+**8.** Now we will fit an lmm to all acquisitions in `mbdata`. Use `SB.2.mm` as the reference for `Acquisition`. The response variable is `zcor`, and include `gender`, `scanner`, and `Acquisition` as fixed effects, and `id` as a random intercept. Print the output of `summary()`.
+
+```{r}
+mbdata$Acquisition <- as.factor(mbdata$Acquisition)
+mbdata$Acquisition <- relevel(mbdata$Acquisition, ref="SB.2.mm")
+
+
+linear_mixed_model_all_acquisitions <- lmer(zcor ~ gender + scanner + Acquisition + (1 | id), data = mbdata)
+summary(linear_mixed_model_all_acquisitions)
+```
+
+
+**9.** Read the section *Diagnostics* in [Bates et al, "Fitting Linear Mixed-Effects Models Using lme4," Journal of Statistical Software, 2015](https://www.jstatsoft.org/article/view/v067i01). Perform model diagnostics by creating the three plots described there (fitted versus residual, scale-location, and quantile-quantile plots). Note you will need the library `lattice` to use `qqmath()`. Are there any potential issues?
+
+In the residuals vs. fitted plot, the differences between observed and predicted values (aka the residuals) are plotted on the y-axis and the predicted values(fitted values) are plotted on the x-axis. There is some fanning, and line is pretty off from a straight line, indicating non-linearity.
+
+In the scale-location plot, the square root of the standardized residuals are plotted on the y axis, and the fitted values are plotted on the x-axis. There is a slight increase in slope, which means that residuals increase as fitted increase, which means that there may not be constant variance.
+
+In the normal QQ plot, we are comparing the distribution of residuals to the normal distribution. The points here deviate slightly at the tails, indicating that there may be some deviation from normality in the residuals.
+
+```{r}
+library(lattice)
+# standard fitted vs. residual
+plot(linear_mixed_model_all_acquisitions, type = c("p", "smooth"))
+#scale-location 
+plot(linear_mixed_model_all_acquisitions, sqrt(abs(resid(.))) ~ fitted(.), type = c("p", "smooth"))
+#and qq (from lattice)
+qqmath(linear_mixed_model_all_acquisitions, id = 0.05)
+
+```
+
+
+**10.** In multiple regression, we examined the influence of single data points by examining how the model changed when that data point was removed. In mixed models, we can examine the influence of removing one subject. We will do this using a package called `influence.ME`. Plot the Cook's distances that are calculated by refitting the model after removing one subject. This can be done adapting the following code chunk: `plot(influence(mymixedmodel,group='id'),which='cook')`. Are there any large issues?
+
+Rule of thumb is that cook's distances should not be greater than 1. None of the subjects have cook's distances greater than 1, so no large issues.
+
+```{r}
+library(influence.ME)
+
+infl <- influence(linear_mixed_model_all_acquisitions, group = 'id')
+plot(infl, which = 'cook')
+```
+
+
+**11.** Now test the hypothesis that acquisition has a significant effect on the z-transformed correlations when controlling for gender and scanner type.  Summarize your findings using complete sentences, stating the result, test statistic, degrees of freedom, and p-value.
+
+
+H0: Acquisition does not have a significant effect on the z-transformed correlations when controlling for gender and scanner type.
+H1: Acquisition has a significant effect on the z-transformed correlations when controlling for gender and scanner type.
+
+Our test statistic is chi squared statistic equal to 199.46 with 8 degrees of freedom. Our p-value is less than 2.2e-16. Additionally, our AIC was much improved with the random slope model. Our decision is to reject the null hypothesis and conclude that acquisition has a significant effect on the z-transformed correlations when controlling for gender and scanner type.
+
+
+Test statistic: chi squared: 199.46
+
+df = 8
+
+P-value: < 2.2e-16
+
+Decision: Reject the null hypothesis
+
+Conclusion: Acquisition has a significant effect on the z-transformed correlations when controlling for gender and scanner type.
+
+
+```{r}
+linear_mixed_model_all_acquisitions2 <- lmer(zcor ~ gender + scanner + (1 | id), data = mbdata)
+summary(linear_mixed_model_all_acquisitions2)
+
+anova(linear_mixed_model_all_acquisitions, linear_mixed_model_all_acquisitions2)
+```
+
+
+# Problem 2. 
+For this problem, we again use the Parkinson's dataset, `parkinsons.csv`.
+
+**1.**
+ Fit a linear mixed model with `motor_UPDRS` as the response variable, `subject` as a random intercept, and `age`, `sex`, `Jitter_Percent`, `Shimmer`, `NHR`, and `PPE` as fixed effects. Do not re-scale any variables. Print the output of `summary()`. Are there any warnings?  (Note: we should also check model assumptions as in Problem 1, but in the interest of time, we will skip these important checks.) 
+ 
+Warning: Some predictor variables are on very different scales: consider rescaling
+
+```{r}
+setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data")
+parkinsons_data <- read.csv("parkinsons.csv")
+
+park_model1 <- lmer(motor_UPDRS ~ age + sex + Jitter_Percent + Shimmer + NHR + PPE + (1 | subject), data = parkinsons_data)
+summary(park_model1)
+```
+
+**2.** Now scale `age`. Use `scale()` such that the resulting variable has unit variance and mean zero. Re-fit the model from the previous question. Does the t-statistic of `age` change?
+
+No, the t-statistic does not change.
+
+```{r}
+parkinsons_data$age_scaled <- scale(parkinsons_data$age)
+
+linear_mixed_model_scaled_age <- lmer(motor_UPDRS ~ age_scaled + sex + Jitter_Percent + Shimmer + NHR + PPE + (1 | subject), data = parkinsons_data)
+summary(linear_mixed_model_scaled_age)
+
+```
+
+
+**3.** How do the p-values compare to the model without random effects that was fit in HW1 question 2.4 (the same model but without the random intercept)? Specifically, for each variable, list the p-value from the model without the random intercept versus the p-value from the mixed model.
+
+From model without the random intercepts:
+
+(Intercept):       9.64e-06 ***
+
+age:              < 2e-16 ***
+
+sex:              0.47891    
+
+Jitter_Percent:    0.00808 ** 
+
+Shimmer:           0.50060    
+
+NHR:               0.04718 *  
+
+PPE:               < 2e-16 ***
+
+
+
+From mixed model:
+                
+(Intercept):      0.5708 
+
+age:              0.0585 .   (age NOT SCALED)
+
+sex:              0.8214    
+
+Jitter_Percent:   0.0114 *  
+
+Shimmer:          0.0423 *  
+
+NHR:              0.0422 *  
+
+PPE:              0.2649 
+
+
+Compared to the model without the random intercepts, and at an alpha of 0.05, the p-values from the mixed model for:
+
+-intercept is larger, becomes insignificant
+
+-age is larger, becomes insignificant
+
+-sex is larger, already insignificant
+
+-jitter_percent is larger, still significant
+
+-shimmer is smaller, becomes significant
+
+-nhr is slightly smaller, still significant
+
+-ppe is larger, becomes insignificant
+
+
+
+```{r}
+selected_predictors_model <- lm(motor_UPDRS ~ age + sex + Jitter_Percent + Shimmer + NHR + PPE, data = parkinsons_data)
+summary(selected_predictors_model)
+```
+
+
+**4.** Next we will fit a model with random slopes. Some patients may have a more rapid rate of decline in `motor_UPDRS` than others. The variable `test_time` indicates the time since enrollment. First try to fit the model with the addition of a main effect for `test_time` and a random slope for `test_time` without re-scaled variables and print the output of `summary()`. (Include age+sex+Jitter_Percent+Shimmer+NHR+PPE and the random intercept for subject). Do you receive any warnings?
+
+Warning: Some predictor variables are on very different scales: consider rescaling
+
+Warning: Model failed to converge with max|grad| = 4.93123 (tol = 0.002, component 1)
+
+```{r}
+q4 <- lmer(motor_UPDRS ~ age + sex + Jitter_Percent + Shimmer + NHR + PPE + test_time + (test_time | subject), data = parkinsons_data)
+
+summary(q4)
+```
+
+
+**6.** Refit the model with scaled `age` and scaled `test_time`. Does the variance parameter for the random intercept change? Do the t-statistics of any of the fixed effects change? 
+
+Yes, the variance parameter for the random intercept increases.
+Yes, the t-statistics for all the fixed effects change (very slightly for some).
+
+  The t-statistic for the intercept increases to make it significant at an alpha=0.05.
+  The t-statistic for age decreases slightly, making it not significant at an alpha=0.05.
+  The t-statistic for sex increases to make it less negative, and it still remains insignificant at an alpha=0.05.
+  The t-statistic for Jitter_Percent decreases very slightly, and it still remains insignificant at an alpha=0.05.
+  The t-statistic for Shimmer decreases very slightly to make it more negative, but it still remains insignificant at an alpha=0.05.
+  The t-statistic for NHR increases to make it less negative, and it still remains insignificant at an alpha=0.05.
+  The t-statistic for PPE decreases very slightly to make it more negative, but it still remains insignificant at an alpha=0.05.
+  The t-statistic for test_time decreases very slightly, but it still remains significant at an alpha=0.05.
+
+```{r}
+parkinsons_data$age_scaled <- scale(parkinsons_data$age)
+parkinsons_data$test_time_scaled <- scale(parkinsons_data$test_time)
+
+# Fit the linear mixed model with scaled age and test_time
+q6 <- lmer(motor_UPDRS ~ age_scaled + sex + Jitter_Percent + Shimmer + NHR + PPE + test_time_scaled + (1 + test_time_scaled | subject), data = parkinsons_data)
+
+# Print the summary of the model
+summary(q6)
+```
+
+
+**7.** Create a plot of the subject-specific random slope plus population slope of scaled test time plus the subject-specific intercept plus the overall intercept, with scaled test time as the x-axis. Include the population estimate in a thicker red line. Based on visual inspection, do the slopes differ substantially between patients? 
+
+The subject-specific lines show variation and different slopes across patients, so the slopes may indeed differ substantially between patients.
+
+```{r}
+
+plot(parkinsons_data$motor_UPDRS ~ parkinsons_data$test_time_scaled, xlab = "Test Time, Scaled", ylab = "motor UPDRS", type="n")
+for (i in 1:length(unique(parkinsons_data$subject))){
+  y = parkinsons_data$motor_UPDRS[parkinsons_data$subject == i];
+  x = parkinsons_data$test_time_scaled[parkinsons_data$subject == i]
+  lines(y~x, type = "b", col="grey", cex=1, lwd=0.5)
+}
+
+abline(21.51459, 0.64269, col=2, lwd=4, lty=1)
+legend("bottomright", "Mean Trend", col=2, lwd=4, lty=1, cex=1.5, bty="n")
+  
+
+
+```
+
+
+
+**8.** Conduct a likelihood ratio test for the model with versus without random slope. Which model is preferred? 
+
+It seems like the alternative model(with random slopes) is preferred. Since the p-value is <0.05, at an alpha of 0.05, the random slope significantly contributes to explaining the variability for motor_UPDRS. Additionally, the AIC is smaller and the log likelihood is higher for the random slope, which is preferred.
+
+```{r}
+# Fit the null model without a random slope for test_time
+null_model <- lmer(motor_UPDRS ~ age_scaled + sex + Jitter_Percent + Shimmer 
+                   + NHR + PPE + test_time_scaled + (1 | subject), data = parkinsons_data)
+# Fit the alternative model with a random slope for test_time
+alternative_model <- lmer(motor_UPDRS ~ age_scaled + sex + Jitter_Percent 
+                          + Shimmer + NHR + PPE + test_time_scaled + (1 + test_time_scaled | subject), data = parkinsons_data)
+
+
+lrt <- anova(null_model, alternative_model)
+print(lrt)
+
+```
+
+
+**9.** Recall that the p-values for likelihood ratio tests of random effects tend to be too large, and similarly, the AIC can select overly simple models, which is a consequence of the null hypothesis being on the boundary of the parameter space (i.e., variance = 0). We will calculate a simulation-based p-value for the restricted likelihood ratio test (i.e., from REML). Unfortunately, the simulation approach assumes the random effects are uncorrelated. Refit the model with the random slope and intercept uncorrelated using REML. Then use the function `exactRLRT()` to test the null hypothesis that the variance of the random slope is equal to zero. Which model is preferred? The code below is from the help manual for `exactRLRT()`. 
+
+
+H0:  the variance of the random slope is equal to zero
+
+H1:  the variance of the random slope is NOT equal to zero
+
+test statistic: 6302.6
+
+p-value: < 2.2e-16
+
+Decision: Reject null hypothesis
+
+Conclusion:  the variance of the random slope is NOT equal to zero. Therefore, the model with random slopes is preferred.
+
+
+```{r}
+library(RLRsim)
+# data(sleepstudy, package = "lme4")
+# mA <- lme4::lmer(Reaction ~ I(Days-4.5) + (1|Subject) + (0 + I(Days-4.5)|Subject),
+# data = sleepstudy)
+# m0 <- update(mA, . ~ . - (0 + I(Days-4.5)|Subject))
+# m.slope <- update(mA, . ~ . - (1|Subject))
+# #test for subject specific slopes:
+# exactRLRT(m.slope, mA, m0)
+```
+```{r}
+# Fit the model with uncorrelated random slope and intercept using REML
+linear_mixed_model_uncorrelated <- lmer(motor_UPDRS ~ age_scaled + sex + Jitter_Percent + Shimmer + NHR + PPE + test_time_scaled + (1|subject) + (0 + test_time_scaled | subject), data = parkinsons_data, REML = TRUE)
+
+# Create the null model without the random slope
+null_model <- update(linear_mixed_model_uncorrelated, . ~ . - (0 + test_time_scaled | subject))
+
+slopes <- update(linear_mixed_model_uncorrelated, . ~ . - (1|subject))
+                
+# Test for the significance of the random slope using exactRLRT
+exactRLRT(slopes, linear_mixed_model_uncorrelated, null_model)
+
+```
+
