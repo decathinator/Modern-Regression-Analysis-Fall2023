@@ -1,0 +1,355 @@
+---
+title: "Homework 4"
+#Uncomment and/or fill these in:
+author: "your name here"
+#date: "`r format(Sys.time(), '%d %B, %Y')`"
+#output: pdf_document
+output: 
+  html_document:
+    number_sections: true
+---
+
+**Due October 30, 2023 prior to 1:30 PM. Assignments are to be submitted via Canvas.**
+
+**You may discuss the homework problems and computing issues with other students in the class and submit questions to the Canvas discussion board. However, you must write up your homework solution on your own. In particular, do not share your R files with other students. Please list the students you worked with below:**
+
+Students worked with: Same as last time
+
+
+
+Lectures: Module 4  
+
+Objectives:  
+
+1. Quick intro to robust Poisson regression.
+2. Fit and interpret a GEE.
+3. Understand working correlations.
+4. Compare conditional and marginal coefficient estimates in logistic regression with clustered data.
+
+
+# Robust Poisson regression
+Although GEEs are used for clustered data, the package `gee` can also be used for robust regression with just one observation per subject.
+
+**1.1**
+Run the code below. Then fit the Poisson glm with overdispersion and response `Cases` with `c_households`, `c_nohs`, `c_uninsured`, `c_vacant`, and `logPop100k` as an offset, where `c_households` is centered households (the same model as in HW3, 1.13). Then fit the GEE model with the same covariates using `gee::gee`. Hint: create a variable `id` as `1:nrow(dat)` to use as a clustering variable, with just one observation per cluster. 
+```{r}
+hiv_cases = read.csv('C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data\\AtlasPlusTableData_HIV_2016.csv')
+socdet = read.csv('C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data\\AtlasPlusTableData_SocialDeterminants_2016.csv')
+library(tidyr)
+socdet_wide = socdet%>%pivot_wider(names_from = Indicator, values_from=Percent)
+dat = merge(hiv_cases,socdet_wide)
+dat$Pop100k = dat$Cases/dat$Rate.per.100000
+dat$logPop100k = log(dat$Pop100k)
+dat$c_households = scale(dat$`Households living below the federal poverty level`,scale = FALSE)
+dat$c_nohs = scale(dat$`Population 25 years and older w/o HS diploma`,scale = FALSE)
+dat$c_uninsured = scale(dat$Uninsured,scale = FALSE)
+dat$c_vacant = scale(dat$`Vacant housing`,scale=FALSE)
+
+# variable `id`
+dat$id <- 1:nrow(dat)
+library(gee)
+
+# Poisson GLM with overdispersion
+q1 <- glm(Cases ~ offset(logPop100k) + c_households + c_nohs + c_uninsured + c_vacant,
+                   data = dat, family = quasipoisson)
+summary(q1)
+
+
+# GEE model with the same covariates
+q1_1 <- gee(Cases ~ offset(logPop100k)+ c_households + c_nohs + c_uninsured + c_vacant ,
+                 data = dat, id = id, family = poisson)
+summary(q1_1)
+
+```
+
+
+**1.2**
+How do the t statistics from `glm` compare to the naive z from `gee`?
+
+The t statistics from glm are the same as the naive z from gee.
+
+**1.3**
+How do the t-statistics from `glm` compare to the robust z from `gee`?
+
+The t statistics from glm are similar but slightly different compared to the robust z from gee.
+For each coefficient, the t statistic for glm slightly larger than the robust z from gee, except for intercept (which is slightly smaller).
+
+
+# GEEs for Gaussian data: multiband data from HW2. 
+
+In this problem, we will continue working with the multiband dataset on connectivity between the right and left thalamus. We will use `geepack`, which is an alternative package for fitting GEEs. 
+
+**2.1**
+REVIEW: First, make the reference level for `Acquisition` equal to `SB.2.mm`. Then refit the mixed model with `Acquisition`, `gender`, `scanner`, and random intercept `id`. Create the plot of the residuals and restate the major issue previously identified.
+
+In the residuals vs. fitted plot, the differences between observed and predicted values (aka the residuals) are plotted on the y-axis and the predicted values(fitted values) are plotted on the x-axis. There is some fanning, which indicates heteroskedasticity. And the line is off from a straight line, indicating there may be non-linearity.
+```{r}
+library(lmerTest)
+library(dplyr)
+
+mbdata = read.csv("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data\\thalamus_mb_selected.csv")
+
+mbdata$Acquisition <- as.factor(mbdata$Acquisition)
+
+mbdata$Acquisition <- relevel(mbdata$Acquisition, ref = "SB.2.mm")
+q2_1 <- lmer(zcor ~ Acquisition + gender + scanner + (1 | id), data = mbdata)
+plot(q2_1, type=c("p", "smooth"))
+summary(q2_1)
+
+```
+
+**2.2**
+What is the ICC?
+```{r}
+0.01071 / (0.01071 + 0.04069)
+```
+
+
+**2.3**
+Now, fit a gee with the same fixed effects and exchangeable working correlation structure using `geepack::geeglm`. Print the output of summary. 
+
+```{r}
+library(geepack)
+q2_3 <- geeglm(zcor ~ Acquisition + gender + scanner, id = id, data = mbdata, corstr = "exchangeable")
+summary(q2_3)
+```
+
+
+**2.4**
+What is the ICC in the gee?
+
+ICC is alpha, which is 0.1973.
+
+
+**2.5**
+What is the test statistic for Acquisition MB=8 in the gee with exchangeable working correlation structure? How does it compare to the linear mixed model? (Note: the Wald statistic in geepack::geeglm corresponds to the robust variance estimator). 
+
+GEE: Wald: 39.828  
+LMM: t stat: -6.09  -> squared = 37.0881
+
+The test statistic for GEE with exchangable working correlation is larger than the linear mixed model.
+
+
+**2.6**
+Now fit the same gee but with unstructured working correlation. Print the output of summary.  
+
+
+```{r}
+q2_6<- geeglm(zcor ~ Acquisition + gender + scanner, id = id, data = mbdata, corstr = "unstructured")
+summary(q2_6)
+```
+
+
+
+**2.7**
+Let $i$ denote participant and $j$ denote sample, here coinciding with single-band 2 mm ($j=1$), multiband=12 ($j=2$), multiband 2 ($j=3$), ..., $j=9$ corresponds to SB.3.3.mm. What is $Corr(y_{i1},y_{i8})$ according to this model? What is $Corr(y_{i2},y_{i9})$? 
+
+$Corr(y_{i1},y_{i8})$ = 0.4098.
+$Corr(y_{i2},y_{i9})$ = 0.2847.
+
+
+**2.8**
+Use `geepack::QIC` to select between the exchangeable and unstructured correlation structure. QIC is interpreted in the same way as AIC. (Some authors have criticized QIC, but others have argued it is useful.) For more information about QIC, see Pan 2001 in the Readings, where QIC is defined in equation 8. Which working correlation is preferred?
+
+QIC for the unstructured correlation structure is smaller compared to the exchangeable correlation structure. Since we prefer smaller QICs, the unstructured correlation structure is preferred.
+```{r}
+geepack::QIC(q2_3)
+geepack::QIC(q2_6)
+```
+
+
+
+# 3
+In this problem, we will analyze a dataset from a randomized control trial with 80 women. We are interested in predicting health status (good or poor) controlling for age group and time and including an interaction between age group and treatment. 
+
+```{r}
+library(readr)
+library(dplyr)
+health = read_csv("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data\\health.csv") %>%
+janitor::clean_names()
+health = health %>% mutate(
+health = case_when(health=='Poor'~0, TRUE ~ 1),
+agegroup = factor(agegroup),
+treatment = factor(txt, levels = c("Control","Intervention")),
+time_months = case_when(time == 1 ~ 0, time == 2 ~ 3, time == 3 ~ 6, TRUE ~ 12), time = factor(time))
+```
+
+**3.1.**
+Fit the glmm with outcome `health`, predictors `time_months`, `treatment`, `agegroup`, the interaction between `treatment` and `agegroup`, and a random intercept for `id`. First, fit the model with the default optimization (no argument for nAQG, i.e. Laplace Approximation). Print the output of summary. 
+```{r}
+q3_1 <- glmer(
+  health ~ time_months + treatment + agegroup + (treatment:agegroup) + (1 | id),
+  data = health,
+  family = binomial
+)
+summary(q3_1)
+```
+
+
+**3.2.**
+Next, refit the model with nAGQ=50. Do the results differ? Use nAGQ=50 in the results that follow. 
+
+The results differ slightly, with each coefficient increasing in magnitude slightly. For example, the intercept estimate increases in magnitude slightly from -1.256 to -1.2762. While the p-values also chaange slightly, the significances between models remains the same (e.g. time_months is agegroup25-34 is significant at alpha=0.01 in both models).
+The variance for random effects is slightly larger for nAGQ=50.
+```{r}
+q3_2 <- glmer(
+  health ~ time_months + treatment + agegroup + (treatment*agegroup) + (1 | id),
+  data = health,
+  family = binomial, 
+  nAGQ = 50
+)
+summary(q3_2)
+```
+
+
+
+**3.3**
+What is the odds ratio and 95% confidence interval for treatment=Intervention in age group 25-34 versus Control in age group 25-34?
+
+1.72 (0.378, 7.78)
+
+```{r}
+control <- 2.0624
+intervention <- -1.5228
+
+q3_3 <- exp(2.0624 + -1.5228)
+q3_3
+
+
+q3_3var <- vcov(q3_2)
+q3_3var2 <- q3_3var["treatmentIntervention", "treatmentIntervention"] + 
+            q3_3var["treatmentIntervention:agegroup25-34", "treatmentIntervention:agegroup25-34"] + 
+            2 * q3_3var["treatmentIntervention", "treatmentIntervention:agegroup25-34"]
+
+q3_3 * exp(- 1.96 * sqrt(q3_3var2))
+q3_3 * exp(1.96 * sqrt(q3_3var2))
+
+```
+
+
+
+**3.4**
+Write out a gee model with outcome `health`, predictors `treatment`, `agegroup`, `treatment*agegroup`, and `time_months`, and exchangeable working correlation. Note: you can adapt this latex code
+$$R_i = \pmatrix{1 & a & b & c \\ d & 1 & e & f \\ g & h & 1 & i \\ j & k & l & 1}.$$
+
+If $p_{ij}$ is the probability of good health for subject i and time j, then $y_{ij}$ ~ Bernoulli$(p_{ij})$ where $y_{ij}$ is the health outcome.
+
+Then the model can be written as:
+
+$$logit(P(y_{ij} = 1)) = \beta_0 + \beta_1Treatment + \beta_2AgeGroup25to34_{ij} + \beta_3AgeGroup35plus_{ij} + \beta_4TimeMonths_{ij} + \beta_5Treatment*AgeGroup25to34_{ij} + \beta_6Treatment*AgeGroup35plus_{ij}$$
+
+where we are using an exchangeable working correlation.
+
+$$Cov(y_i) = \phi D_i^{1/2}R_i(\alpha)D_i^{1/2}$$ 
+where $\phi$ is the scale parameter and $D_{i, [j,j]} = e^{x_{ij}'\beta}/ (1+e^{x_{ij}'\beta})^2$
+
+$\beta_0$ is baseline expected log odds of good health when all other covariates are zero.
+
+$\beta_1$ is the log odds ratio associated with treatment while controlling for other covariates.
+$\beta_2$ is the log odds ratio associated with age group 25-34 while controlling for other covariates.
+$\beta_3$ is the log odds ratio associated with age group 34+ while controlling for other covariates.
+$\beta_4$ is the log odds ratio associated with time_months while controlling for other covariates.
+$\beta_5$ is the log odds ratio associated with the interaction of age group 25-34 and treatment while controlling for other covariates.
+$\beta_6$ is the log odds ratio associated with the interaction of age group 34+ and treatment while controlling for other covariates.
+
+$$R_i(\alpha) = \pmatrix{1 & \alpha & \alpha & \alpha \\ \alpha & 1 & \alpha & \alpha \\ \alpha & \alpha & 1 & \alpha \\ \alpha & \alpha & \alpha & 1}.$$
+
+
+
+**3.5**
+Fit the gee with outcome `health`, predictors `treatment`, `agegroup`, `treatment*agegroup`, and `time_months`, and exchangeable working correlation. Print the output of summary and comment on how the direction of effects and p values compare to the glmm. 
+
+The direction of effects is the same for the two models. The p-values change slightly. The p-values for time_months, treatmentIntervention, agegroup25-34, and agegroup35+ are larger for GEE compared to GLMM, and the rest are smaller. The significances also change for some predictors. For example, agegroup25-34 goes from significant at alpha=0.05 in GLMM to being not significant at alpha = 0.05 in GEE.
+
+```{r}
+q3_5 <- geeglm(
+  health ~ treatment + agegroup + treatment:agegroup + time_months,
+  data = health,
+  id = id,
+  family = binomial,
+  corstr = "exchangeable"
+)
+
+summary(q3_5)
+```
+
+
+**3.6**
+What is the value of $\alpha$? What is $Corr(y_{i1},y_{i4})?
+
+Alpha is 0.31. So $Corr(y_{i1},y_{i4})$ is 0.31.
+
+**3.7**
+Fit the gee with outcome `health`, predictors `treatment`, `agegroup`, `treatment*agegroup`, and `time_months`, and AR1 working correlation. NOTE: check that the data are sorted correctly. Print the output of summary.
+
+```{r}
+# Ensure that the data are sorted correctly by 'id' and 'time_months'
+health_sorted <- health %>% arrange(id, time_months)
+
+# Fit the GEE model with AR1 working correlation
+q3_7 <- geeglm(
+  health ~ treatment + agegroup + treatment:agegroup + time_months,
+  data = health_sorted,
+  id = id,
+  family = binomial,
+  corstr = "ar1"
+)
+
+# Print the summary of the GEE model
+summary(q3_7)
+```
+
+
+**3.8**
+What is the value of the AR1 coefficient? What is $Corr(y_{i1},y_{i4})$?
+
+The value of the AR1 coefficient is 0.4245731. Then $Corr(y_{i1},y_{i4})$ = 0.4245731^3 = 0.0765.
+
+
+**3.9**
+What is the odds ratio and 95% confidence interval for treatment=Intervention in age group 25-34 versus Control in age group 25-34? How does this compare to the GLMM?
+
+GLMM: 1.72 (0.378, 7.78)
+GEE: 1.38 (0.519, 3.69)
+
+The 95% CI for the GEE is narrower than the 95% CI for GLMM. The OR estimate for GEE is also slightly smaller than GLMM.
+
+```{r}
+control <- 1.3267
+intervention <- -1.0010
+
+q3_9 <- exp(1.3267 + -1.0010)
+q3_9
+
+
+q3_9var <- vcov(q3_7)
+q3_9var2 <- q3_9var["treatmentIntervention", "treatmentIntervention"] + 
+            q3_9var["treatmentIntervention:agegroup25-34", "treatmentIntervention:agegroup25-34"] + 
+            2 * q3_9var["treatmentIntervention", "treatmentIntervention:agegroup25-34"]
+
+q3_9 * exp(- 1.96 * sqrt(q3_9var2))
+q3_9 * exp(1.96 * sqrt(q3_9var2))
+```
+
+
+**3.10**
+Does age group modify the effect of treatment? State the null hypothesis, conduct a statistical test, and state your conclusion. Use the AR1 working correlation structure.
+
+H0: Age group does not modify the effect of treatment. $\beta_5 = \beta_5 = 0$  
+H1: Age group does modify the effect of treatment.   
+Test statistic: chi-squared test statistic = 2.06  
+Alpha = 0.05  
+P-value = 0.36  
+Decision: Fail to reject null hypothesis  
+Conclusion: Age group does not modify the effect of treatment  
+
+
+```{r}
+q3_10 = geeglm(health ~ treatment + agegroup + time_months, 
+                    id = id, corstr = 'ar1', family = "binomial", data = health)
+
+anova(q3_10, q3_7)
+```
+
+
+

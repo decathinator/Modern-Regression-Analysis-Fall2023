@@ -4,7 +4,7 @@
 # note: there are two packages for gee: gee and geepack.
 library(gee)
 args(gee)
-setwd('./Data')
+setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023/Data")
 dat = read.csv('pig.csv')
 
 

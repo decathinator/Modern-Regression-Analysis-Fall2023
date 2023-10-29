@@ -1,0 +1,543 @@
+---
+title: "Homework 3"
+#Uncomment and/or fill these in:
+author: "Cathy Zhuang"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+#output: pdf_document
+output: 
+  html_document:
+    number_sections: true
+---
+
+**Due October 16, 2023 prior to 1:30 PM.**
+
+**You may discuss the homework problems and computing issues with other students in the class and submit questions to the Canvas discussion board. However, you must write up your homework solution on your own. In particular, do not share your R files with other students. Please list the students you worked with below:**
+
+Students worked with: Same as last time + Winn
+
+
+Lectures: Module 3  (parts I, II, and III)
+
+Objectives:  
+
+1. Fit and interpret a Poisson model.
+2. Understand offsets.
+3. Perform diagnostics in a Poisson model. 
+4. Fit and interpret a logistic mixed model with multiple variance components.
+
+# Problem 1. 
+The dataset contains the number of HIV cases at the state level in 2016. The  data were obtained from https://www.cdc.gov/nchhstp/atlas. 
+
+**1.**
+Run the code below to create a dataset. Then fit the intercept only model with response variable `Cases` using ordinary least squares and the R function `lm()`. Interpret the intercept.  
+
+The expected number of HIV cases for a state without considering population, insurance, and other socioeconomic factors (the other covariates), is 773.1 cases.
+
+```{r}
+library(lmerTest)
+
+hiv_cases = read.csv('C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data\\AtlasPlusTableData_HIV_2016.csv')
+socdet = read.csv('C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data\\AtlasPlusTableData_SocialDeterminants_2016.csv')
+
+library(tidyr)
+socdet_wide = socdet%>%pivot_wider(names_from = Indicator, values_from=Percent)
+
+dat = merge(hiv_cases,socdet_wide)
+dat$Pop100k = dat$Cases/dat$Rate.per.100000
+
+# intercept only model
+q1 <- lm(Cases ~ 1, data = dat)
+summary(q1)
+
+```
+
+**2.**
+Next, fit an intercept-only Poisson model to `Cases` and interpret the intercept on the log-scale and back-transformed scale.   
+
+The log expected HIV case counts for a state without considering socioeconomic factors (the other covariates) is 6.65.
+The expected HIV case counts for a state without considering socioeconomic factors(the other covariates) is 773.0784.
+```{r}
+q2 <- glm(Cases ~ 1, data = dat, family="poisson")
+summary(q2)
+
+# back transformed
+exp(coef(q2)[1])
+```
+
+
+
+**3.**
+What is $\widehat{Var}(y_i)$ in the lm? What is $\widehat{Var}(y_i)$ in the Poisson model?  
+
+In the lm, $\widehat{Var}(y_i)$ is 1354169.  
+In the Poisson model, $\widehat{Var}(y_i)$ is the expected HIV case count (same as the expected value of yi). Here it is 773.0784.
+```{r}
+# lm
+summary(q1)$sigma^2
+
+# poisson
+exp(coef(q2)[1])
+```
+
+
+**4.**
+Next, fit an intercept only quasipoisson model to `Cases`. According to this model, what is the expected counts, and how does this compare to 1.2?  
+
+According to this model, the expected counts are 773.0784, and it is the same as problem 1.2.
+
+```{r}
+q4 <- glm(Cases ~ 1, data = dat, family="quasipoisson")
+summary(q4)
+exp(coef(q4)[1])
+
+```
+
+
+**5.**
+What is the value of the dispersion parameter? Are there issues with the original Poisson model?  
+
+The value of the dispersion parameter is 1751.658. This means that there are issues with the original Poisson model in that there is a lot of overdispersion, so the original Poisson model is not a good fit.
+```{r}
+summary(q4)
+```
+
+
+**6.**
+Now fit an intercept-only OLS model to log `Rate.per.100000`. Interpret the intercept on the log-scale and back-transformed scale.  
+
+The expected log rate per 100000 people is 2.236324 HIV cases without considering other covariates.  
+The exponentiated average of the log rate per 100000 people is 9.35886 HIV cases without considering other covariates.
+
+```{r}
+q6 <- lm(log(Rate.per.100000) ~ 1, data = dat)
+summary(q6)
+
+coef(q6)[1]
+exp(coef(q6)[1])
+
+```
+
+
+**7.**
+Next, fit a Poisson model with offset log `Pop100k`. Interpret the intercept on the log-scale and back-transformed scale. 
+
+The log expected case rate per 100k is 2.68 without considering other covariates.  
+The expected case rate per 100k is 14.6 without considering other covariates.
+
+```{r}
+q7 <- glm(Cases ~ 1 + offset(log(Pop100k)), data = dat, family = poisson)
+summary(q7)
+
+```
+
+
+
+**8.**
+Jensen's inequality states that for a concave function $f(.)$, we have $$E(f(X))\leq f(E(X)).$$
+How should the coefficient in the lm of the log rate compare to the coefficient in the Poisson model?   
+
+The coefficient in the lm of the log rate is less than the coefficient in the Poisson model. This is consistent with Jensen's inequality.
+```{r}
+coef(q6)[1] < coef(q7)[1]
+```
+
+
+**9.**
+Next, write out the Poisson model fitting `Cases` with the offset log `Pop100k` and the centered predictors `Households living below the federal poverty level`, `Population 25 years and older w/o HS diploma`, `Uninsured`, and `Vacant housing`. (In writing out this model, indicate that the predictors are centered in your description of the predictors. The offset is not centered.)  
+
+
+If $y_i$ is the case count for state $i$, then $y_i$ is independently distributed as a Poisson distribution with expected HIV case count $\lambda_i$.   
+
+The model is:
+$$log(\lambda_i) = log(Pop100k_i) + \beta_0 + \beta_1Poverty_i^* + \beta_2NoDiploma_i^* + \beta_3Uninsured_i^* + \beta_4Vacant_i^*$$
+
+$log(Pop100k)$ is the log of the population in hundred thousands. This variable is the offset to account for population size differences.  
+
+$\beta_0$ is the estimated log mean number of HIV cases for state $i$ while adjusting for the log population size (Pop100k) for the average number of households living below federal poverty level, the average population 25 years and older without a HS diploma, the average number of uninsured, and the average number of vacant housing.  
+
+$\beta_1$ is the coefficient for the centered predictor variable `Households living below the federal poverty level`. $e^{\beta_1}$ would be interpreted as the rate ratio of HIV cases for every one unit increase in `Households living below the federal poverty level` in a model controlling all other predictor variables.  
+
+$\beta_2$ is the coefficient for the centered predictor variable `Population 25 years and older w/o HS diploma`. $e^{\beta_2}$ would be interpreted as the rate ratio of HIV cases for every one unit increase in `Population 25 years and older w/o HS diploma` in a model controlling all other predictor variables.  
+
+$\beta_3$ is the coefficient for the centered predictor variable `Uninsured`. $e^{\beta_3}$ would be interpreted as the rate ratio of HIV cases for every one unit increase in `Uninsured` in a model controlling all other predictor variables.  
+
+$\beta_4$ is the coefficient for the centered predictor variable `Vacant housing`. $e^{\beta_4}$ would be interpreted as the rate ratio of HIV cases for every one unit increase in `Vacant housing` in a model controlling all other predictor variables.
+
+
+**10.**
+Fit this model. Are the coefficients significant according to the output of `summary()`?  
+
+The significant coefficients are the centered `Population 25 years and older w/o HS diploma`, `Uninsured`, and `Vacant housing` at an alpha=0.05 level. The coefficient for centered `Households living below the federal poverty level` is not significant at an alpha=0.05 level. The model intercept is also significant at an alpha=0.05 level, meaning that it is not zero.
+```{r}
+q10 <- glm(Cases ~ offset(log(Pop100k)) +
+                     scale(`Households living below the federal poverty level`, center=TRUE, scale = FALSE) +
+                     scale(`Population 25 years and older w/o HS diploma`, center=TRUE, scale = FALSE) +
+                     scale(Uninsured, center=TRUE, scale = FALSE) +
+                     scale(`Vacant housing`, center=TRUE, scale = FALSE), data = dat, family = poisson)
+
+
+summary(q10)
+
+```
+
+
+**11.**
+Conduct a goodness of fit test. State the null hypothesis and your conclusion.  
+
+H0: The model adequately fits the data.  
+H1: The model does not adequately fit the data.  
+
+Test statistic: Chi squared statistic of 5597.6641  
+Decision: Reject the null hypothesis  
+Conclusion: The model does not adequately fit the data.  
+
+```{r}
+overdisp_fun <- function(model) {
+  rdf <- df.residual(model)
+  rp <- residuals(model,type="pearson")
+  Pearson.chisq <- sum(rp^2)
+  prat <- Pearson.chisq/rdf
+  pval <- pchisq(Pearson.chisq, df=rdf, lower.tail=FALSE)
+  c(chisq=Pearson.chisq,ratio=prat,rdf=rdf,p=pval)
+}
+overdisp_fun(q10)
+```
+
+**12.**
+Are the p-values from the model valid? If invalid, state why they are invalid.   
+
+The p-values from the model are invalid because our GOF test found that the model does not adequately fit the data and that there is a lack of fit. Therefore, since our model does not fit the data, our p-values are invalid.  
+
+
+**13.**
+Fit the Poisson model with overdispersion parameter. What is the value of the overdispersion parameter, and what would it be equal to if model assumptions were met?  
+
+The value of the overdispersion parameter is 121.6911. If model assumptions were met, the value would be around 1 to show that the variance = mean assumption is met. Since our overdispersion parameter value is far from 1, we can say that there may indeed be overdispersion.
+
+```{r}
+q13 <- glm(Cases ~ offset(log(Pop100k)) +
+                     scale(`Households living below the federal poverty level`, center=TRUE, scale = FALSE) +
+                     scale(`Population 25 years and older w/o HS diploma`, center=TRUE, scale = FALSE) +
+                     scale(Uninsured, center=TRUE, scale = FALSE) +
+                     scale(`Vacant housing`, center=TRUE, scale = FALSE), data = dat, family = quasipoisson)
+
+
+summary(q13)
+```
+
+
+**14.**
+Create the diagnostic plots from `plot()` and comment on whether model assumptions are met. 
+
+Residuals vs. Fitted: The relationship between the fitted values and the residuals does not seem to be linear, as indicated by the red "line".  
+
+Q-Q Plot: There seems to be some deviance in the normal Q-Q plot, especially at the upper end, which means that the standardized deviance residuals may not be normally distributed.  
+
+Scale location: The standardized deviance residuals does not appear to be roughly constant across the fitted values, which means that there may be heteroskedasticity.  
+
+Residuals vs. leverage: There may be some problematic points in terms of leverage, which are indicated in the plot (10, 5, 44). 10 and 44 also have high Cook's distances, which may indicate that they are influential.  
+
+```{r}
+plot(q13)
+```
+
+
+
+**15.**
+Compare the p-values of the predictors in the fitted model without the overdispersion parameter and the fitted model with the overdispersion parameter.   
+
+Intercept: Significant in both models (both <2e-16 ***).  
+
+scale(`Households living below the federal poverty level`):  
+  Without overdispersion parameter: 0.245;     
+  With overdispersion parameter: 0.9165;   
+  Both are not significant at alpha=0.05, but the p-value increases for the model with the overdispersion parameter.  
+
+scale(`Population 25 years and older w/o HS diploma`) :  
+  Without overdispersion parameter:<2e-16;     
+  With overdispersion parameter: 0.0730;   
+  The p-value increases for the model with the overdispersion parameter, turning the coefficient from significant to insignificant at alpha=0.05.  
+
+scale(Uninsured)  :  
+  Without overdispersion parameter:<2e-16;     
+  With overdispersion parameter: 0.0835;   
+  The p-value increases for the model with the overdispersion parameter, turning the coefficient from significant to insignificant at alpha=0.05.  
+  
+scale(`Vacant housing`) :  
+  Without overdispersion parameter:<2e-16;     
+  With overdispersion parameter: 0.2074;   
+  The p-value increases for the model with the overdispersion parameter, turning the coefficient from significant to insignificant at alpha=0.05.
+  
+
+**16.**
+Back transform the intercept and provide an approximate 95% confidence interval, then interpret the back-transformed intercept.
+  
+Intercept: 12.81228 
+95% CI: (11.14344, 14.73105)  
+
+Interpretation: Holding all other predictor variables centered at their means, and using log of the population (in hundreds of thousands) as an offset, the estimated mean number of HIV cases is 12.81228 with a 95% CI of (11.14344, 14.73105).
+ 
+```{r}
+intercept_coef <- coef(q13)[1]
+se_intercept <- summary(q13)$coefficients[1, 2]
+
+exp(intercept_coef)
+exp(intercept_coef - 1.96 * se_intercept)
+exp(intercept_coef + 1.96 * se_intercept)
+
+```
+
+
+**17.**
+What is the percentage change in cases per 100k when the proportion of uninsured increases from 5 to 6?  
+
+The percent change is 3.422257%.
+```{r}
+coefficient_uninsured <- coef(q13)["scale(Uninsured, center = TRUE, scale = FALSE)"]
+
+100 * ((exp(coefficient_uninsured )) -1)
+
+```
+
+
+**18.**
+What is the percentage change in cases per 100k when the proportion of uninsured increases from 15 to 16?  
+
+The percent change is 3.422257%.
+```{r}
+coefficient_uninsured <- coef(q13)["scale(Uninsured, center = TRUE, scale = FALSE)"]
+
+100 * ((exp(coefficient_uninsured )) -1)
+
+```
+
+
+
+**19.**
+Now fit a log linear model assuming Gaussianity instead of Poisson using the `lm()` function (i.e., OLS). Use log `Rate.per.100000` as the response and include centered predictors `Households living below the federal poverty level`, `Population 25 years and older w/o HS diploma`, `Uninsured`, and `Vacant housing`. Assess model assumptions using `plot()`. (Comment on each of the four plots.)
+
+In the residual vs. fitted, the line is not quite linear, indicating that there may be a problem with linearity.  
+There is slight deviance in the ends of the q-q plot which may indicate some deviance in normality of the residuals.  
+In the scale-location plot, there is a slight u-shape, which suggests possible violations of homoskedasticity.  
+In the residuals vs. leverage plot, there are a few points that high leverage. Additionally, observation 9 seems to be influential, as it is past the recommended cook's distance.  
+
+```{r}
+# Fit the log-linear model (OLS)
+q19 <- lm(log(Rate.per.100000) ~ scale(`Households living below the federal poverty level`) +
+                       scale(`Population 25 years and older w/o HS diploma`, center = TRUE, scale = FALSE) +
+                       scale(Uninsured, center = TRUE, scale = FALSE) +
+                       scale(`Vacant housing`, center = TRUE, scale = FALSE), data = dat)
+summary(q19)
+
+# Create diagnostic plots
+plot(q19)
+
+```
+
+
+
+**20.**
+What is the percentage change in cases per 100k when the proportion of uninsured increases by one unit?  
+
+The percentage change is 3.400216 %.
+```{r}
+coefficient_uninsured2 <- coef(q19)["scale(Uninsured, center = TRUE, scale = FALSE)"]
+
+100 * ((exp(coefficient_uninsured2 )) -1)
+```
+
+
+**21.**
+How do the coefficient estimates and p-values compare between the overdispersed Poisson model and the log transformed OLS model? 
+
+
+Intercept:   
+  Overdispersed Poisson: 2.55040, p<2e-16  
+  Log transformed OLS:  2.23632, p<2e-16  
+  The intercept decreases slightly but the p-values remain significant at alpha=0.05.  
+  
+scale(`Households living below the federal poverty level`, center = TRUE, scale = FALSE)  
+  Overdispersed Poisson: 0.00475, p= 0.9165  
+  Log transformed OLS:  0.14463, p= 0.31670    
+  The intercept increases slightly but the p-values remain insignificant at alpha=0.05.  
+  
+scale(`Population 25 years and older w/o HS diploma`, center = TRUE, scale = FALSE)  
+  Overdispersed Poisson: 0.06239, p=0.0730  
+  Log transformed OLS:   0.09241, p=0.08357  
+  The intercept increases slightly but the p-values remain insignificant at alpha=0.05.  
+
+scale(Uninsured, center = TRUE, scale = FALSE)     
+  Overdispersed Poisson: 0.03365, p=0.0835  
+  Log transformed OLS:   0.03344, p=0.25656  
+  The intercept decreases slightly and the p-value becomes insignificant at alpha=0.05.  
+  
+scale(`Vacant housing`, center = TRUE, scale = FALSE)  
+  Overdispersed Poisson:  0.02963, p=0.2074  
+  Log transformed OLS:    -0.06202, p=0.00785  
+  The intercept turns negative and the p-value becomes significant at alpha=0.05.  
+
+
+
+
+# Problem 2.
+
+In this problem, we will use logistic regression to examine the factors influencing the presence of pathogens in fecal sludges in Malawi. 
+```{r}
+malawi = read.csv('C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data\\Malawi_Fecal_Sludge_Data_to_post.csv')
+```
+
+**1.**
+Write out a statistical model that uses logistic regression with response `Depth_pathogen_presence` with random effects for `Latrine_ID`, `Pathogen_Target`, and their interaction, and including `Depth`, `HH_population`, `shared_latrine`, `pit_type`, `water_source`, and `toilet_paper` as fixed effects. Let $\theta_{0i}$, $\theta_{1j}$, and $\theta_{2ij}$ denote the random effects, which we assume are independent. For factors, use the R convention reference level and include a separate coefficient for each level.
+
+
+$$\log\left(\frac{p_{ijk}}{1-p_{ijk}}\right) = β_0 + β_1 \text{Depth(Middle)}_{ijk} + β_2 \text{Depth(Top)}_{ijk} + β_3 \text{HH_population}_{ijk} \\+ β_4 \text{shared_latrine}_{ijk} + β_5 \text{pit_type}_{ijk} + β_6 \text{water_source_house}_{ijk} +  β_7 \text{water_source_public}_{ijk} + β_8 \text{toilet_paper}_{ijk} \\+ \theta_{0i} + \theta_{1j} + \theta_{2ij}$$
+
+$p_{ijk} $ is the probability of `Depth_pathogen_presence` for latrine i, pathogen target j, and depth k.
+
+
+If $y_{ijk}$ is `Depth_pathogen_presence`, it is independently distributed as a Bernoulli distribution with $p_{ijk}$. In other words, $y_{ijk} \overset{indep.}{\sim}  Bernoulli(p_{ijk})$.
+
+
+$\beta_0$ is the baseline expected log odds of depth pathogen presence when all other covariates are zero.
+  
+$\theta_{0i}$ is the latrine specific deviation in baseline expected log odds. It is IID with $N(0, \nu^2)$ with $\nu^2$ being variance between latrines.
+  
+$\theta_{1j}$ is the pathogen target specific deviation in baseline expected log odds. It is IID with $N(0, \tau^2)$ with $\tau^2$ being variance between pathogen targets.
+  
+$\theta_{2ij}$ is the pathogen target and latrine interaction specific deviation in baseline expected log odds. It is IID with $N(0, \sigma^2)$ where $\sigma^2$ is variance between the specific combinations of pathogen targets and latrines.
+  
+
+The model also assumes $\theta_{0i} \perp\!\!\!\perp \theta_{1j}  \perp\!\!\!\perp  \theta_{2ij}$.
+  
+
+$\beta_1$ is the log odds ratio associated with middle depth while controlling for other covariates.
+$\beta_2$ is the log odds ratio associated with top depth while controlling for other covariates.
+$\beta_3$ is the log odds ratio associated with HH_population while controlling for other covariates.
+$\beta_4$ is the log odds ratio associated with shared_latrine while controlling for other covariates.
+$\beta_5$ is the log odds ratio associated with pit_type while controlling for other covariates.
+$\beta_6$ is the log odds ratio associated with water_source_house while controlling for other covariates.
+$\beta_7$ is the log odds ratio associated with water_source_public while controlling for other covariates.
+$\beta_8$ is the log odds ratio associated with toilet_paper while controlling for other covariates.
+
+**2.**
+What is $Var[y_{ijk} \ | \theta_{0i}, \theta_{1j}, \theta_{2ij}]$? 
+
+$$p_{ij} * (1 - p_{ij})$$
+
+
+**3.**
+Fit the model using the default optimizer. For the random effects, use the form (1|Latrine_ID)+(1|Pathogen_Target)+(1|Latrine_ID:Pathogen_Target). Do you get any warnings? If so, what are they?  
+
+
+Warning: Model failed to converge with max|grad| = 0.0937838 (tol = 0.002, component 1)
+
+```{r}
+q23 <- glmer(Depth_pathogen_presence ~ Depth + HH_population + shared_latrine + pit_type + water_source + toilet_paper +
+                 (1|Latrine_ID) + (1|Pathogen_Target) + (1|Latrine_ID:Pathogen_Target),
+               family = binomial, data = malawi)
+```
+
+
+**4.**
+Fit all available optimizers using `allFit()`. Adapt this code: `lapply(allfits,function(x) x@optinfo$conv$lme4$messages)`. Did any algorithms converge?   
+  
+  
+The algorithms that converged were bobyqa, nlminbwrap, and nlopwrap.NLOPT_LN_BOBYQA
+
+```{r}
+# Fit the model with all available optimizers
+allfits <- allFit(q23)
+
+lapply(allfits, function(x) x@optinfo$conv$lme4$messages)
+
+```
+
+
+
+**5.**
+Check whether the results differ greatly across optimizers. Use `lapply(allfits,print)`. In the interest of time, restrict your comments to comments on how the variance components compare for different optimizers.   
+
+The variance components for the interaction term and for pathogen target appear to be similar and stable. However, there are differences in the variance component for latrine ID, which means that our choice of the optimiser will impact our latrine ID random effects.
+
+```{r}
+# Print the summaries of all model fits to compare variance components
+lapply(allfits, print)
+
+```
+
+
+
+**6.**
+Extract the bobyqa results and report the summary. (Hint: If `allfits` is the output form `allFit`, use `model.boby=allfits[['bobyqa']])`. For variables that have $p<0.05$, state the null hypothesis and your conclusion.  
+
+H0: The baseline expected log odds of depth pathogen presence when all other covariates are zero is 0.  
+H1: The baseline expected log odds of depth pathogen presence when all other covariates are zero is not 0.  
+Decision: Reject null hypothesis  
+Conclusion: At an alpha level of 0.05, the baseline expected log odds of depth pathogen presence when all other covariates are zero is not zero.  
+
+The rest of the following are GIVEN ALL OTHER COVARIATES CONSTANT:  
+
+H0: HH_population does not contribute significantly to the log odds ratio of depth pathogen presence.   
+H1: HH_population does contribute significantly to the log odds ratio of depth pathogen presence.  
+Decision: Reject null hypothesis  
+Conclusion: At an alpha level of 0.05, we reject the null hypothesis and conclude that HH_population contributes significantly to the log odds ratio of depth pathogen presence.   
+
+H0: the log odds ratio of pathogen presence for water_sourcehouse is not significantly different from the log odds ratio of pathogen presence for compound water sources.   
+H1: the log odds ratio of pathogen presence for water_sourcehouse is significantly different from the log odds ratio of pathogen presence for compound water sources.  
+Decision: Reject null hypothesis  
+Conclusion: At an alpha level of 0.05, we reject the null hypothesis and conclude that the log odds ratio of pathogen presence for water_sourcehouse is significantly different from the log odds ratio of pathogen presence for compound water sources.  
+
+H0: The log odds ratio of pathogen presence for water_sourcepublic is not significantly different from the log odds ratio of pathogen presence for compound water sources.  
+H1: The log odds ratio of pathogen presence for water_sourcepublic is significantly different from the log odds ratio of pathogen presence for compound water sources.  
+Decision: Reject null hypothesis  
+Conclusion: At an alpha level of 0.05, we reject the null hypothesis and conclude that the log odds ratio of pathogen presence for water_sourcepublic is significantly different from the log odds ratio of pathogen presence for compound water sources.  
+
+
+```{r}
+model.boby <- allfits[['bobyqa']]
+summary(model.boby)
+```
+
+
+
+
+**7.**
+Use bobyqa results in the problems that follow. Interpret the coefficient of `DepthTop` and provide a 95\% confidence interval.   
+
+The log odds ratio for a latrine sample with DepthTop versus bottom depth is -0.21786 (-0.6084488, 0.1727288).  
+The odds ratio for a latrine sample with DepthTop versus bottom depth is 0.804238. Meaning that the odds of Depth_pathogen_presence for a latrine sample with DepthTop is 0.804238 times the odds for a latrine sample without DepthTop.
+
+```{r}
+-0.21786 + (1.96 * 0.19928)
+-0.21786 - (1.96 * 0.19928)
+
+exp(-0.21786)
+exp(-0.21786 + (1.96 * 0.19928))
+exp(-0.21786 - (1.96 * 0.19928))
+```
+
+**8.**
+What is the odds ratio for a pathogen in a latrine with a public water source versus a compound water source, with 95\% confidence interval?
+
+2.178812 (1.069763, 4.43764)
+
+```{r}
+exp(0.77878)
+exp(0.77878 + (1.96 * 0.36293 ))
+exp(0.77878 - (1.96 * 0.36293 ))
+```
+
+
+**9.**
+What is the probability of pathogen presence in a household with 10 people with a public water source, all other variables set to the baseline? 
+
+The probability is 0.4379121.
+
+```{r}
+ans<- -2.82812 + (0.17997*10) +  0.77878
+
+exp(ans)/(1+exp(ans))
+```
+
+
+
