@@ -1,0 +1,351 @@
+---
+title: "Homework 5"
+#Uncomment and/or fill these in:
+author: ""
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+
+output: 
+  html_document:
+    number_sections: true
+---
+
+**Due November 15 prior to 1:30 PM. Assignments are to be submitted via Canvas.**
+
+**You may discuss the homework problems and computing issues with other students in the class and submit questions to the Canvas discussion board. However, you must write up your homework solution on your own. In particular, do not share your R files with other students. Please list the students you worked with below.**
+
+Students worked with: Same as last time
+
+
+Lectures: Module 5 
+
+Objectives:  
+
+1. Fit and interpret an additive model.
+2. Examine different basis functions and smoothing parameter selection in mgcv::gam.
+3. Model the interaction between a factor and continuous variable in GAMs.
+
+# Problem 1. 
+
+In general, people experience a decline in cognitive function with age. Dementia is defined as serious cognitive decline that impacts everyday activities. People with mild cognitive impairment (MCI) are generally able to perform daily activities, but have greater decline in cognitive function than in typical aging. Many people with MCI eventually develop Alzheimer's Disease or other types of dementia.  
+
+We will use a dataset containing an imaging biomarker, a genetic biomarker, and demographic information, defined below. The dataset (MCI.RData) contains data related to the Alzheimer's Disease Neuroimaging Initiative (http://adni.loni.usc.edu/tadpole-challenge-dataset-available/). Parts of the data have been simulated in order to allow data sharing for educational purposes. Qualitatively, the results you discover in this educational dataset are likely to be the same as in the unaltered dataset.
+
+Variable Codebook:
+
+1.  ID  Participant identifier.
+
+2.  VISIT Visit time in months since baseline. 
+
+3.  DX
+
+* 0 = normal aging
+* 1 = MCI
+
+4.	AGE_VISIT			Participant's age at the time of the visit.
+
+5.	PTGENDER		Participant gender.
+
+*	Female
+*	Male
+
+6.	PTEDUCAT  Total years of education.
+
+7.  APOE4 Numeric variable equal to 0, 1, or 2 indicating the individual has 0, 1, or 2 copies of the E4 allele of apolipoprotein. This genetic variant is linked to the formation of amyloid beta deposits in the brain, which is one of the characteristics of Alzheimer's Disease.
+
+8.	HIPPOCAMPUS_VOL Volume of the right plus left hippocampus in mm^3. The hippocampus is a subcortical gray matter structure in the brain that is associated with memory. 
+
+
+We will subset to cross-sectional data. We do this for educational purposes, as we want to fit variants of the model a few times to understand the effects of different spline specifications. It takes a long time to fit the longitudinal gam. So for this homework, it is easier to work with the cross-sectional data. Please note that in your own research projects and future jobs, you will of course want to use all of your data. 
+
+<!-- 0 -->
+Create the cross-sectional dataset and convert hippocampus volume to cm^3:
+
+```{r}
+# set the working directory
+setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data")
+load("MCI.RData")
+mcidata$HIPPOCAMPUS_VOL=mcidata$HIPPOCAMPUS_VOL/1000
+mcidata$APOE4 = factor(mcidata$APOE4)
+mcidata = mcidata[complete.cases(mcidata),]
+mcidata_cx = mcidata[!duplicated(mcidata$ID),]
+
+```
+
+<!-- 1 -->
+## 
+Using mathematical notation, with $g_j(x_{ij})$ for smooth terms, write out a statistical model with normal errors for the cross-sectional data with $y_i$ denoting hippocampus volume in cm^3 and the covariates `DX`, `PTGENDER`, `APOE4` (treating APOE4 as a factor with reference level 0), a smooth for `AGE_VISIT`, and a smooth for `PTEDUCAT`. Include distributional assumptions. (You do not need to write the basis functions used for the smooth terms $g_j(x_{ij})$, nor the penalized objective function.) 
+
+$$y_i = \beta_0 + \beta_1DX + \beta_2PTGENDER + \beta_3APOE4_1 + \beta_4APOE4_2 + g_1(AGEVISIT) + g_2(PTEDUCAT) + \epsilon$$
+$$\epsilon \overset{iid}{\sim} N (0, \sigma^2)$$
+
+
+<!-- 2 -->
+##
+Fit this model using `mgcv::gam`. Use all defaults. Print the output of summary.
+```{r}
+library(mgcv)
+q2 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT)+DX+PTGENDER+APOE4, data= mcidata_cx)
+summary(q2)
+
+```
+
+
+
+<!-- 3 -->
+##
+Create diagnostic plots using `gam.check()`. Briefly comment on each of the four plots. Are there any issues? 
+
+For the deviance residuals plot, the data fits well and does not deviate too much from the straight line. This suggests that our normality assumption is not violated.
+For the residuals vs. linear predictor plot, the residuals appear to be randomly scattered around zero, which means that the model may be adequate for capturing the underlying relationship of our data.
+For the response vs. fitted values plot, it should look linear if k is sufficient, in which it does.
+Finally, the histogram of residuals appears to be normal.
+
+The k-index for PTEDUCAT is slightly less than 1, which may mean that it is underfitted.
+
+```{r}
+gam.check(q2)
+```
+
+
+<!-- 4 -->
+##
+State the null hypothesis for each p-value in the spline basis dimension diagnostics in `gam.check()`. Then state whether it is accepted or rejected at $\alpha=0.05$. 
+
+H0: The basis dimension for AGE_VISIT is adequate
+alpha = 0.05
+p-value: 0.570
+Decision: Fail to reject null hypothesis
+Conclusion: The basis dimension for AGE_VISIT is adequate
+
+H0: The basis dimension for PTEDUCAT is adequate
+alpha = 0.05
+p-value: 0.005
+Decision: Reject null hypothesis
+Conclusion: The basis dimension for PTEDUCAT may not be adequate
+
+
+<!-- 5 -->
+##
+Next, inspect the effective degrees of freedom versus k' in `gam.check()`. Does this approach suggest that k is adequate? 
+
+In general, we want to see k' to be "notably" larger than edf to show that we have indeed tried enough dimensions. Here, our k' is 9 for both smooths, and the edfs are 2.05 and 1.94, so k' is indeed "notably" larger than the edfs. So this suggests that k is adequate.
+
+<!-- 6 -->
+## 
+Try to refit the model with k=20 for `PTEDUCAT`. Why did you receive an error?
+
+The term has fewer unique covariate combinations than specified maximum degrees of freedom.
+
+```{r}
+q6 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT, k=20)+DX+PTGENDER+APOE4, data= mcidata_cx)
+summary(q6)
+```
+
+
+
+<!-- 7 -->
+##
+Re-fit the model with k set to the maximum possible for `PTEDUCAT`. Print the results of `gam.check()`. Did the edf change? Using the criteria of the change in edf, is k=10 sufficient for modeling the impact of `PTEDUCAT`?
+
+The edf decreased slightly. Using the criteria of the change in edf, k=10 is sufficient for modeling the impact of `PTEDUCAT` since we did not need to use more dimensions.
+
+```{r}
+q7 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT, k=length(unique(mcidata_cx$PTEDUCAT)))+DX+PTGENDER+APOE4, data= mcidata_cx)
+summary(q7)
+
+gam.check(q7)
+```
+
+
+<!-- 8 -->
+##
+Let's go back to the model with defaults k=10 from 1.2. Create a plot of the smooth for `AGE_VISIT` using `plot()`.  
+```{r}
+plot(q2, select=1)
+```
+
+
+<!-- 9 -->
+##
+Now create a plot of the smooth for `AGE_VISIT` using `itsadug::plot_smooth()`.
+```{r}
+library(itsadug)
+itsadug::plot_smooth(q2, view="AGE_VISIT")
+```
+
+
+
+<!-- 10 -->
+##
+What does the black curve in 1.9 represent? Use your notation from 1.1. What does the black curve in 1.8 represent? 
+
+Black curve in 1.9 is $\hat{y_i} = \hat{\beta_0} + \hat{\beta_1}DX + \hat{\beta_2}PTGENDER + \hat{\beta_3}APOE4_1 + \hat{\beta_4}APOE4_2 + \hat{g_1}(AGEVISIT) + \hat{g_2}(PTEDUCAT)$
+
+Black curve in 1.8 is $g_1(AGEVISIT)$.
+
+
+<!-- 11 -->
+##
+Write out the coefficient estimates and the parametric term values that contribute to the standard errors used in the confidence intervals in 1.9. For example, if only the intercept, $x_{i1}=1$ and the smooth for `AGE_VISIT` contribute, the formula would be $Var [ \hat{\beta}_0+\hat{\beta}_1 *1 + \hat{g}(AGE\_VISIT)]$. Do the same for the terms that contribute to the standard errors used in 1.8.
+
+1.9: $Var [\hat{\beta_0} + \hat{\beta_1}DX + \hat{\beta_2}PTGENDER + \hat{\beta_3}APOE4_1 + \hat{\beta_4}APOE4_2 + \hat{g_1}(AGEVISIT) + \hat{g_2}(PTEDUCAT)]$
+
+1.8: $Var[\hat{g_1}(AGEVISIT)] $
+
+<!-- 12 -->
+## 
+Re-fit the model with cubic regression splines for both smooth terms. Use k=10. Print the output of `summary()`. 
+
+```{r}
+q12 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT, bs='cr')+s(PTEDUCAT, bs='cr')+DX+PTGENDER+APOE4, data= mcidata_cx)
+summary(q12)
+
+gam.check(q12)
+```
+
+
+<!-- 13 -->
+## 
+Create a plot of the smooth for `AGE_VISIT` from the previous question. For this and all questions hereafter regarding plotting smooths, use `itsadug::plot_smooth()`. How does it compare to the smooth from the thin plate regression spline? Hint: you can use `add=TRUE` in `plot_smooth()` to overlay functions. 
+
+It seems like they are the same.
+```{r}
+itsadug::plot_smooth(q2, view="AGE_VISIT")
+itsadug::plot_smooth(q12, view="AGE_VISIT", add=TRUE)
+```
+
+
+
+<!-- 14 -->
+##
+Now fit the model with thin plate regression splines (i.e., going back to the default splines) using the mixed model random slope approach with REML for tuning parameter selection instead of GCV. 
+
+```{r}
+q14 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT)+DX+PTGENDER+APOE4, data= mcidata_cx, method="REML")
+summary(q14)
+```
+
+
+
+<!-- 15 -->
+##
+Create a plot of the smooth term for `AGE_VISIT` for the model in 1.14. How does it compare to the plot from GCV in 1.9? How do the effective degrees of freedom compare?
+
+The plots look the same.
+
+The effective degrees of freedom are similar but differ slightly. EDF goes from 2 to 2.05 for `s(AGE_VISIT)` and goes from 1.75 to 1.94 for `s(PTEDUCAT)`.
+```{r}
+itsadug::plot_smooth(q14, view="AGE_VISIT")
+itsadug::plot_smooth(q2, view="AGE_VISIT")
+
+gam.check(q14)
+gam.check(q2)
+```
+
+
+<!-- 16 -->
+## 
+Keep using the model from 1.14. Create a plot with simultaneous confidence intervals for the smoother for `AGE_VISIT`. Do this using the package `itsadug()`, `plot_smooth`, and `sim.ci=TRUE`. A nice blog post on simultaneous confidence intervals is https://fromthebottomoftheheap.net/2016/12/15/simultaneous-interval-revisited/. How does the confidence interval compare to the plot that has pointwise confidence bands? 
+
+The simultaneous CIs are larger than that of the pointwise confidence bands.
+```{r}
+itsadug::plot_smooth(q14, view="AGE_VISIT", sim.ci = TRUE, col="orange")
+itsadug::plot_smooth(q14, view="AGE_VISIT", add = TRUE)
+```
+
+
+
+<!-- 17 -->
+##
+What is the effect of an increase in patient age (`AGE_VISIT`) from 59 to 60 years? For simplicity, do not include CI here.
+```{r}
+q17a <- predict(q14, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 59, PTEDUCAT = 16), type="lpmatrix")
+q17b <- predict(q14, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 60, PTEDUCAT = 16), type="lpmatrix")
+
+q17diff <- q17b-q17a 
+dim(q17b-q17a)
+q17diff %*% coef(q14)
+```
+
+<!-- 18 -->
+##
+What is the effect of an increase in patient age (`AGE_VISIT`) from 80 to 81 years? For simplicity, do not include CI.
+
+```{r}
+q18a <- predict(q14, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 80, PTEDUCAT = 16), type="lpmatrix")
+q18b <- predict(q14, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 81, PTEDUCAT = 16), type="lpmatrix")
+
+q18diff <- q18b-q18a 
+dim(q18b-q18a)
+q18diff %*% coef(q14)
+```
+
+
+<!-- 19 -->
+##
+Does patient age, as measured with `AGE_VISIT`, impact hippocampal volume? State the approximate p-value and describe the pattern.
+
+The approximate p-value is <2e-16. Hippocampal volume tends to decrease with `AGE_VISIT`.
+
+```{r}
+summary(q14)
+itsadug::plot_smooth(q14, view="AGE_VISIT", sim.ci = TRUE, col="orange")
+itsadug::plot_smooth(q14, view="AGE_VISIT", add = TRUE)
+```
+
+
+<!-- 20 -->
+##
+We will now examine whether there is an interaction between `APOE4` (as a factor) and `AGE_VISIT`. Fit a model with a smoother for this interaction along with all previous terms (including smoother for `PTEDUCAT`). In practice, you could choose GCV or REML; to facilitate grading, use REML. Print the output of summary. 
+```{r}
+q20 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT)+DX+PTGENDER+APOE4 + s(AGE_VISIT, by = APOE4), data= mcidata_cx, method="REML")
+summary(q20)
+```
+
+
+
+<!-- 21 -->
+##
+Does the default $k=10$ appear to be adequate for all smooth terms?
+
+Yes, it seems to be adequate since edfs are notably smaller than k'.
+```{r}
+gam.check(q20)
+```
+
+
+<!-- 22 -->
+## 
+Create plots to visually assess whether there is an interaction between `APOE4` and `AGE_VISIT`. Use simultaneous confidence intervals and overlay the plots. One way to do this is by adapting the code `cond = list('APOE4'='yourlevel'),add=TRUE,` etc. 
+
+
+<!-- 23 -->
+##
+Using the gam with the interaction, what is the derivative of the smooth term for `AGE_VISIT` and `APOE4`=0 at `AGE_VISIT`=60? What is it for `AGE_VISIT`=75 and `APOE4`=0? (Hint: you can use finite differences.)
+
+
+
+<!-- 24 -->
+##
+What is the derivative of the smooth term for `AGE_VISIT` for `APOE4`=2 at `AGE_VISIT`=60? What is it for `AGE_VISIT`=75 and `APOE4`=2?
+
+
+<!-- 25 -->
+##
+In words, describe how the effect of age is modified by `APOE4`. 
+
+
+<!-- 26 -->
+## 
+Conduct an approximate F test for the interaction between `APOE4` and the smooth for `AGE_VISIT` in the gam. Report the F-statistic, DF numerator and denominator, p-value, and your conclusion. 
+
+
+<!-- 27 -->
+##
+Fit a linear model (no smooth terms) with the same terms and report the F-statistic, DF numerator and denominator, pvalue, and your conclusion according to this linear model for the interaction between `APOE4` and `AGE_VISIT`. 
+
+
+<!-- 28 -->
+## 
+Which model do you prefer: the gam with interactions or the linear model with interactions? Why?
+
