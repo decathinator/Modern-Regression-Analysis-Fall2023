@@ -1,7 +1,7 @@
 ---
 title: "Homework 5"
 #Uncomment and/or fill these in:
-author: ""
+author: "Cathy Zhuang"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 
 output: 
@@ -75,15 +75,29 @@ mcidata_cx = mcidata[!duplicated(mcidata$ID),]
 ## 
 Using mathematical notation, with $g_j(x_{ij})$ for smooth terms, write out a statistical model with normal errors for the cross-sectional data with $y_i$ denoting hippocampus volume in cm^3 and the covariates `DX`, `PTGENDER`, `APOE4` (treating APOE4 as a factor with reference level 0), a smooth for `AGE_VISIT`, and a smooth for `PTEDUCAT`. Include distributional assumptions. (You do not need to write the basis functions used for the smooth terms $g_j(x_{ij})$, nor the penalized objective function.) 
 
-$$y_i = \beta_0 + \beta_1DX + \beta_2PTGENDER + \beta_3APOE4_1 + \beta_4APOE4_2 + g_1(AGEVISIT) + g_2(PTEDUCAT) + \epsilon$$
-$$\epsilon \overset{iid}{\sim} N (0, \sigma^2)$$
+$$y_i \overset{iid}{\sim} N (\mu_i, \sigma^2)$$
+where $y_i$ is hippocampus volume in cm^3 for individual i.
 
+$$y_i = \beta_0 + \beta_1 DX_i + \beta_2 PTGENDER_i + \beta_3 APOE4_{1i} + \beta_4APOE4_{2i} + g_1(AGEVISIT_i) + g_2(PTEDUCAT_i) + \epsilon$$
+
+$$\epsilon \overset{iid}{\sim} N (0, \sigma^2)$$ 
+where $\epsilon$ is our error and $\sigma^2$ is our variance.
+
+$\beta_0$ is the baseline hippocampal volume without considering other covariates.   
+$\beta_1$ is the estimated effect for diagnosis, with 0 as the reference level.
+$\beta_2$ is the estimated effect for gender, with female as the reference level.
+$\beta_3$ is the estimated effect for APOE4 with 1 copy of the allele, with the reference group being 0.
+$\beta_4$ is the estimated effect for APOE4 with 2 copies of the allele, with the reference group being 0.
+$g_1(AGEVISIT_i)$ is the smoothing term for age_visit.
+$g_2(PTEDUCAT_i)$ is the smoothing term for pteducat.
 
 <!-- 2 -->
 ##
 Fit this model using `mgcv::gam`. Use all defaults. Print the output of summary.
 ```{r}
 library(mgcv)
+
+mcidata_cx$APOE4 <- as.factor(mcidata_cx$APOE4)
 q2 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT)+DX+PTGENDER+APOE4, data= mcidata_cx)
 summary(q2)
 
@@ -99,6 +113,7 @@ For the deviance residuals plot, the data fits well and does not deviate too muc
 For the residuals vs. linear predictor plot, the residuals appear to be randomly scattered around zero, which means that the model may be adequate for capturing the underlying relationship of our data.
 For the response vs. fitted values plot, it should look linear if k is sufficient, in which it does.
 Finally, the histogram of residuals appears to be normal.
+Visually, it appears that there may be no issues.
 
 The k-index for PTEDUCAT is slightly less than 1, which may mean that it is underfitted.
 
@@ -111,16 +126,16 @@ gam.check(q2)
 ##
 State the null hypothesis for each p-value in the spline basis dimension diagnostics in `gam.check()`. Then state whether it is accepted or rejected at $\alpha=0.05$. 
 
-H0: The basis dimension for AGE_VISIT is adequate
-alpha = 0.05
-p-value: 0.570
-Decision: Fail to reject null hypothesis
-Conclusion: The basis dimension for AGE_VISIT is adequate
+H0: The basis dimension for AGE_VISIT is adequate  
+alpha = 0.05  
+p-value: 0.675  
+Decision: Fail to reject null hypothesis  
+Conclusion: The basis dimension for AGE_VISIT is adequate  
 
-H0: The basis dimension for PTEDUCAT is adequate
-alpha = 0.05
-p-value: 0.005
-Decision: Reject null hypothesis
+H0: The basis dimension for PTEDUCAT is adequate  
+alpha = 0.05  
+p-value: 0.005  
+Decision: Reject null hypothesis  
 Conclusion: The basis dimension for PTEDUCAT may not be adequate
 
 
@@ -134,11 +149,10 @@ In general, we want to see k' to be "notably" larger than edf to show that we ha
 ## 
 Try to refit the model with k=20 for `PTEDUCAT`. Why did you receive an error?
 
-The term has fewer unique covariate combinations than specified maximum degrees of freedom.
+The term has fewer unique covariate combinations than specified maximum degrees of freedom. k=20 is larger than the number of categories for PTEDUCAT.
 
 ```{r}
-q6 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT, k=20)+DX+PTGENDER+APOE4, data= mcidata_cx)
-summary(q6)
+# q6 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT, k=20)+DX+PTGENDER+APOE4, data= mcidata_cx)
 ```
 
 
@@ -179,18 +193,19 @@ itsadug::plot_smooth(q2, view="AGE_VISIT")
 ##
 What does the black curve in 1.9 represent? Use your notation from 1.1. What does the black curve in 1.8 represent? 
 
-Black curve in 1.9 is $\hat{y_i} = \hat{\beta_0} + \hat{\beta_1}DX + \hat{\beta_2}PTGENDER + \hat{\beta_3}APOE4_1 + \hat{\beta_4}APOE4_2 + \hat{g_1}(AGEVISIT) + \hat{g_2}(PTEDUCAT)$
+Black curve in 1.9 is $\hat{y_i} = \hat{\beta_0} + \hat{\beta_1}(1) + \hat{\beta_2}(1) + \hat{g_1}(AGEVISIT_i) + \hat{g_2}(PTEDUCAT_i=16)$
 
-Black curve in 1.8 is $g_1(AGEVISIT)$.
+Black curve in 1.8 is $\hat{g_1}(AGEVISIT_i)$.
 
 
 <!-- 11 -->
 ##
 Write out the coefficient estimates and the parametric term values that contribute to the standard errors used in the confidence intervals in 1.9. For example, if only the intercept, $x_{i1}=1$ and the smooth for `AGE_VISIT` contribute, the formula would be $Var [ \hat{\beta}_0+\hat{\beta}_1 *1 + \hat{g}(AGE\_VISIT)]$. Do the same for the terms that contribute to the standard errors used in 1.8.
 
-1.9: $Var [\hat{\beta_0} + \hat{\beta_1}DX + \hat{\beta_2}PTGENDER + \hat{\beta_3}APOE4_1 + \hat{\beta_4}APOE4_2 + \hat{g_1}(AGEVISIT) + \hat{g_2}(PTEDUCAT)]$
+1.9: $Var[\hat{\beta_0} + \hat{\beta_1}(1) + \hat{\beta_2}(1) + \hat{g_1}(AGEVISIT_i) + \hat{g_2}(PTEDUCAT_i=16)]$
 
-1.8: $Var[\hat{g_1}(AGEVISIT)] $
+1.8: $Var[\hat{g_1}(AGEVISIT_i)]$ 
+
 
 <!-- 12 -->
 ## 
@@ -208,10 +223,10 @@ gam.check(q12)
 ## 
 Create a plot of the smooth for `AGE_VISIT` from the previous question. For this and all questions hereafter regarding plotting smooths, use `itsadug::plot_smooth()`. How does it compare to the smooth from the thin plate regression spline? Hint: you can use `add=TRUE` in `plot_smooth()` to overlay functions. 
 
-It seems like they are the same.
+It appears that they are the same.
 ```{r}
-itsadug::plot_smooth(q2, view="AGE_VISIT")
-itsadug::plot_smooth(q12, view="AGE_VISIT", add=TRUE)
+itsadug::plot_smooth(q2, view="AGE_VISIT", col="red")
+itsadug::plot_smooth(q12, view="AGE_VISIT", add=TRUE, col="blue")
 ```
 
 
@@ -235,8 +250,8 @@ The plots look the same.
 
 The effective degrees of freedom are similar but differ slightly. EDF goes from 2 to 2.05 for `s(AGE_VISIT)` and goes from 1.75 to 1.94 for `s(PTEDUCAT)`.
 ```{r}
-itsadug::plot_smooth(q14, view="AGE_VISIT")
-itsadug::plot_smooth(q2, view="AGE_VISIT")
+itsadug::plot_smooth(q14, view="AGE_VISIT", col="red")
+itsadug::plot_smooth(q2, view="AGE_VISIT", add=TRUE, col="blue")
 
 gam.check(q14)
 gam.check(q2)
@@ -258,6 +273,8 @@ itsadug::plot_smooth(q14, view="AGE_VISIT", add = TRUE)
 <!-- 17 -->
 ##
 What is the effect of an increase in patient age (`AGE_VISIT`) from 59 to 60 years? For simplicity, do not include CI here.
+
+The effect of an increase in patient age from 59 to 60 years is a 0.08210043 cm^3  decrease in hippocampal volume, controlling for all other covariates.
 ```{r}
 q17a <- predict(q14, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 59, PTEDUCAT = 16), type="lpmatrix")
 q17b <- predict(q14, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 60, PTEDUCAT = 16), type="lpmatrix")
@@ -271,6 +288,7 @@ q17diff %*% coef(q14)
 ##
 What is the effect of an increase in patient age (`AGE_VISIT`) from 80 to 81 years? For simplicity, do not include CI.
 
+The effect of an increase in patient age from 80 to 81 years is a 0.0659635 cm^3  decrease in hippocampal volume, controlling for all other covariates.
 ```{r}
 q18a <- predict(q14, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 80, PTEDUCAT = 16), type="lpmatrix")
 q18b <- predict(q14, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 81, PTEDUCAT = 16), type="lpmatrix")
@@ -285,7 +303,7 @@ q18diff %*% coef(q14)
 ##
 Does patient age, as measured with `AGE_VISIT`, impact hippocampal volume? State the approximate p-value and describe the pattern.
 
-The approximate p-value is <2e-16. Hippocampal volume tends to decrease with `AGE_VISIT`.
+The approximate p-value is <2e-16. Hippocampal volume tends to decrease with `AGE_VISIT`. The decrease is slightly larger for younger ages.
 
 ```{r}
 summary(q14)
@@ -298,7 +316,7 @@ itsadug::plot_smooth(q14, view="AGE_VISIT", add = TRUE)
 ##
 We will now examine whether there is an interaction between `APOE4` (as a factor) and `AGE_VISIT`. Fit a model with a smoother for this interaction along with all previous terms (including smoother for `PTEDUCAT`). In practice, you could choose GCV or REML; to facilitate grading, use REML. Print the output of summary. 
 ```{r}
-q20 <- gam(HIPPOCAMPUS_VOL~s(AGE_VISIT)+s(PTEDUCAT)+DX+PTGENDER+APOE4 + s(AGE_VISIT, by = APOE4), data= mcidata_cx, method="REML")
+q20 <- gam(HIPPOCAMPUS_VOL~DX+PTGENDER+APOE4 + s(PTEDUCAT)+ s(AGE_VISIT, by = APOE4), data= mcidata_cx, method="REML")
 summary(q20)
 ```
 
@@ -317,11 +335,33 @@ gam.check(q20)
 <!-- 22 -->
 ## 
 Create plots to visually assess whether there is an interaction between `APOE4` and `AGE_VISIT`. Use simultaneous confidence intervals and overlay the plots. One way to do this is by adapting the code `cond = list('APOE4'='yourlevel'),add=TRUE,` etc. 
+```{r}
+itsadug::plot_smooth(q20, view="AGE_VISIT", sim.ci = TRUE, col="orange", cond = list('APOE4'=0))
+itsadug::plot_smooth(q20, view="AGE_VISIT", sim.ci = TRUE, col="red", cond = list('APOE4'=1), add=TRUE)
+itsadug::plot_smooth(q20, view="AGE_VISIT", sim.ci = TRUE, cond = list('APOE4'=2), add=TRUE)
+```
+
 
 
 <!-- 23 -->
 ##
 Using the gam with the interaction, what is the derivative of the smooth term for `AGE_VISIT` and `APOE4`=0 at `AGE_VISIT`=60? What is it for `AGE_VISIT`=75 and `APOE4`=0? (Hint: you can use finite differences.)
+
+The derivative of the smooth term for `AGE_VISIT` and `APOE4`=0 at `AGE_VISIT`=60 is -0.03594941.  For `AGE_VISIT`=75 and `APOE4`=0 it is -0.09095349.
+
+```{r}
+q23a1 <- predict(q20, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 60+1e-05, PTEDUCAT = 16))
+q23a2 <- predict(q20, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 60-1e-05, PTEDUCAT = 16))
+q23b1 <- predict(q20, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 75+1e-05, PTEDUCAT = 16))
+q23b2 <- predict(q20, data.frame(DX=1, PTGENDER="Male", APOE4 = 0, AGE_VISIT = 75-1e-05, PTEDUCAT = 16))
+
+
+q23adiff <- q23a1-q23a2 
+q23adiff/2e-05
+
+q23bdiff <- q23b1-q23b2 
+q23bdiff/2e-05
+```
 
 
 
@@ -329,23 +369,78 @@ Using the gam with the interaction, what is the derivative of the smooth term fo
 ##
 What is the derivative of the smooth term for `AGE_VISIT` for `APOE4`=2 at `AGE_VISIT`=60? What is it for `AGE_VISIT`=75 and `APOE4`=2?
 
+The derivative of the smooth term for `AGE_VISIT` for `APOE4`=2 at `AGE_VISIT`=60 is -0.2976912. For `AGE_VISIT`=75 and `APOE4`=2 it is -0.0305863.
+```{r}
+q24a1 <- predict(q20, data.frame(DX=1, PTGENDER="Male", APOE4 = 2, AGE_VISIT = 60+1e-05, PTEDUCAT = 16))
+q24a2 <- predict(q20, data.frame(DX=1, PTGENDER="Male", APOE4 = 2, AGE_VISIT = 60-1e-05, PTEDUCAT = 16))
+q24b1 <- predict(q20, data.frame(DX=1, PTGENDER="Male", APOE4 = 2, AGE_VISIT = 75+1e-05, PTEDUCAT = 16))
+q24b2 <- predict(q20, data.frame(DX=1, PTGENDER="Male", APOE4 = 2, AGE_VISIT = 75-1e-05, PTEDUCAT = 16))
+
+
+q24adiff <- q24a1-q24a2 
+q24adiff/2e-05
+
+q24bdiff <- q24b1-q24b2 
+q24bdiff/2e-05
+```
+
+
 
 <!-- 25 -->
 ##
 In words, describe how the effect of age is modified by `APOE4`. 
 
+When age is 60, the effect is larger in magnitude for APOE4=2 compared to APOE4=0.
+When age is 75, the effect is smaller in magnitude for APOE4=2 compared to APOE4=0.
+Overall, age_visit has a negative effect, and the effect appears to be larger for more copies of APOE4. For APOE4=2, it seems that the effect is a little more pronounced than the others for ages approximately 62-83. 
 
 <!-- 26 -->
 ## 
 Conduct an approximate F test for the interaction between `APOE4` and the smooth for `AGE_VISIT` in the gam. Report the F-statistic, DF numerator and denominator, p-value, and your conclusion. 
+
+H0: The interaction between APOE4 and the smooth for AGE_VISIT does not contribute to the model for hippocampal volume.  
+H1: The interaction between APOE4 and the smooth for AGE_VISIT does contribute to the model for hippocampal volume.  
+df numerator= 8.8  
+df denom= 838  
+F statistic=2.0402  
+p-value=0.03368  
+alpha=0.05  
+Decision: Reject null hypothesis  
+Conclusion: The interaction between APOE4 and the smooth for AGE_VISIT does contribute to the model for hippocampal volume.
+
+```{r}
+anova(q14, q20, test="F")
+```
+
 
 
 <!-- 27 -->
 ##
 Fit a linear model (no smooth terms) with the same terms and report the F-statistic, DF numerator and denominator, pvalue, and your conclusion according to this linear model for the interaction between `APOE4` and `AGE_VISIT`. 
 
+H0: The interaction between APOE4 and AGE_VISIT does not contribute to the model for hippocampal volume.  
+H1: The interaction between APOE4 and AGE_VISIT does contribute to the model for hippocampal volume.  
+df numerator= 2  
+df denom= 849  
+F statistic=0.4385   
+p-value=0.6452  
+alpha=0.05    
+Decision: Fail to reject null hypothesis    
+Conclusion: The interaction between APOE4 and AGE_VISIT does not contribute to the model for hippocampal volume. 
+
+```{r}
+q27 <- lm(HIPPOCAMPUS_VOL~AGE_VISIT+PTEDUCAT+DX+PTGENDER+APOE4 +AGE_VISIT*APOE4, data= mcidata_cx)
+q27a <- lm(HIPPOCAMPUS_VOL~AGE_VISIT+PTEDUCAT+DX+PTGENDER+APOE4, data= mcidata_cx)
+
+summary(q27)
+anova(q27a, q27)
+```
+
 
 <!-- 28 -->
 ## 
 Which model do you prefer: the gam with interactions or the linear model with interactions? Why?
+
+I prefer the GAM because some of the edfs are greater than 1, which means that it seems reasonable to use the smooth term. Additionally, interaction terms are significant in the GAM.
+
 

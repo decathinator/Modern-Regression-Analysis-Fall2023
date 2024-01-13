@@ -1,0 +1,301 @@
+---
+title: "Homework 6"
+#Uncomment and/or fill these in:
+author: "Cathy Zhuang"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+
+output: 
+  html_document:
+    number_sections: true
+---
+
+**Due December 11 prior to 11:59 PM.**
+
+**You may discuss the homework problems and computing issues with other students in the class and submit questions to the Canvas discussion board. However, you must write up your homework solution on your own. In particular, do not share your R files with other students. Please list the students you worked with below.**
+
+Students worked with: Same as last time
+
+Lectures: Module 6
+
+Objectives: 
+
+1. Overfitting
+2. PCA and PCA regression
+3. Lasso
+4. Elastic Net
+
+We will use a dataset, MCI_MRI.RData, related to the Alzheimer's Disease Neuroimaging Initiative data used in HW5 (http://adni.loni.usc.edu/tadpole-challenge-dataset-available/). Parts of the data have been simulated in order to allow data sharing for educational purposes. Qualitatively, the results you discover in this educational dataset are likely to be the same as in the unaltered dataset.
+
+In HW5, we examined hippocampal volume. Here, we will examine hundreds of brain morphometry features, including cortical thickness in different regions of the cortex, standard deviation of cortical thickness in these regions, surface area, and volume. 
+
+y:  Diagnosis. 0 = cognitively normal; 1 = mild cognitive impairment. 
+
+x: MRI features.
+
+labels: categories of variables that will be useful for data exploration.
+
+  "Volume (Not Cortex)" is assigned to all structures that are not part of the cerebral cortex, which includes the subcortical gray matter structures such as the hippocampus, as well as the ventricles, which are cavities filled with cerebral spinal fluid that do not contain brain tissue. 
+  
+  "Surface Area" is the estimated surface area for cortical regions, where the regions are defined using a brain parcellation. 
+  
+  "Average cortical thickness" is the thickness of the cortical region averaged across all locations (vertices) that fall in that region. 
+  
+  "SD Cortical Thickness" is the standard deviation of the cortical thickness across all locations (vertices) that fall in that region. 
+  
+  "Cortical Volume" is the estimated volume of gray matter for cortical regions. 
+
+
+The data have been standardized to have unit variance. **Remember that this is important in PCA and penalized regression.** Be careful when working with your own data. 
+
+
+```{r}
+setwd("C:\\Git\\Modern-Regression-Analysis-Fall2023\\Data")
+load("MCI_MRI.RData")
+library(pcaMethods)
+library(ISLR)
+library(pls)
+library(glmnet)
+```
+
+
+# Overfitting. 
+
+1.1. Fit a model predicting diagnosis using all variables in x. (To save space, do not print the output of summary.) Hint: make $\texttt{x}$ a matrix. Does the fit produce any warnings?
+
+Warning: glm.fit: algorithm did not converge  
+Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred
+```{r}
+x_matrix <- as.matrix(x)
+q1_1 <- glm(y ~ ., data = data.frame(cbind(y, x_matrix)), family = "binomial")
+```
+
+1.2 Why are the fitted probabilities numerically 0 or numerically 1? 
+
+The fitted probabilities numerically 0 or 1 means that we may have overfit the data (in the case of the bias-variance tradeoff, it means low bias and high variance). This may happen when we are estimating a large number of parameters and we don't have enough data to estimate the parameters accurately.
+
+
+# PCA.
+
+2.1. Conduct a PCA of x. Create a screeplot of all eigenvalues. 
+```{r}
+q2_1 <- prcomp(x_matrix, center=TRUE, scale.=TRUE)
+screeplot(q2_1, npcs=328)
+```
+
+
+2.2. Create a screeplot of the first 20 eigenvalues only.
+```{r}
+screeplot(q2_1, npcs = 20)
+plot(q2_1$sdev[1:20]^2,xlab='Rank of Eigenvalue',ylab='Eigenvalue',main='Screeplot',type='b')
+```
+
+
+2.3. Using the plot of the first 20 eigenvalues, where does the "elbow" occur? How much variance is captured by the components prior to the elbow?
+
+The "elbow" seems to occur at the 3rd or 4th component, since the eigenvalues start to level off at the 3rd or 4th component. 
+At the 2nd component, 33% of the variance is captured. At the 3rd component, 37% of the variance is captured. At the 4th component, 40% of the variance is captured.
+
+```{r}
+cumvar <- cumsum(q2_1$sdev^2)/sum(q2_1$sdev^2)
+cumvar
+```
+
+2.4. How many components are required to maintain 90% of the variance?
+
+98 components.
+```{r}
+which(cumvar >= 0.90)[1]
+```
+
+
+2.5. Create a scatter plot of the loadings of PC1 and PC2 with the points colored by `labels`. What patterns do you observe? Which labels tend to cluster?
+
+There may  be some clustering with average cortical thickness, cortical volume, SD cortical thickness, and surface area. Volume (not cortex) seems to be a little more spread out. In terms of patterns, it seems like PC1 has two parts and PC2 has three based on how the data is clustering.
+
+```{r}
+plot(q2_1$rotation[,1],q2_1$rotation[,2], col = labels, xlab='PC1 Loading',ylab='PC2 Loading', main = "Loadings of PC1 and PC2")
+legend("bottomright", legend = levels(labels), fill = unique(labels), title = "Labels", cex = 0.5)
+```
+
+
+2.6. Now perform PCA regression using the principal component scores from above and $\texttt{glm}$. You will need to decide on the number of components to include. Print the results from $\texttt{summary()}$. 
+
+I chose 5 components since the elbow seemed to be at 3-5.
+```{r}
+tempdata <- data.frame("Diagnosis" = y, q2_1$x[,1:5])
+q2_6 <- lm(Diagnosis~PC1+PC2+PC3+PC4+PC5, data=tempdata)
+summary(q2_6)
+```
+
+
+2.7. For the most significant component, create a plot of the loadings versus index number and color by the labels. Note the sign of the loadings is not identifiable. For interpretability, multiply all loadings by -1 if the largest loading in magnitude is negative. What patterns do you notice?
+
+It seems that each category (average cortical thickness, cortical volume, sd cortical thickness, surface area, volume not cortex) has some clustering. The loadings decrease as the index increases.
+
+```{r}
+plot(q2_1$rotation[,2]*-1, col = labels, xlab='Index Number',ylab='PC2 Loadings * -1', main = "Loadings of PC 2 vs. Index Number")
+legend("bottomleft", legend = levels(labels), fill = unique(labels), title = "Labels", cex = 0.5)
+```
+
+
+
+2.8. What are the VIFs?
+```{r}
+car::vif(q2_6)
+```
+
+
+# Lasso.
+
+3.1. Fit the penalized glm with all predictors using the lasso with $\texttt{glmnet}$, and create a plot of the coefficient paths using $\texttt{plot()}$. Hint: make $\texttt{x}$ a matrix. What does this plot represent? What is the x axis and y axis? What are the numbers at the top of the figure?
+
+The plot represents how the coefficients and predictors would change with a different lambda (which is our penalization term). Our y axis is the coeffient values and the x axis is sum of the magnitude of the coefficients. The numbers at the top of the figure show how many nonzero coefficients there are.  
+
+So As our lambda increases, we can see that our coefficient values change and are shrunk towards 0.
+
+```{r}
+q3_1 <- glmnet(x_matrix, y, family = "binomial", alpha = 1)
+plot(q3_1)
+```
+
+
+3.2. Perform 10-fold cross validation. To facilitate grading, set the seed to 777. Create a plot of the mean deviance versus log lambda from cross-validation.  You may need to adjust the values of lambda so that the minimum is in the interior of the range of lambda. 
+```{r}
+set.seed(777)
+q3_2 <- cv.glmnet(x_matrix, y, family = "binomial", alpha = 1, nfolds = 10)
+plot(q3_2)
+```
+
+
+3.3. Create a plot of the coefficients estimated using lambda.min versus index number. Exclude the intercept, and color by the labels. Do you notice any patterns? 
+
+Most coefficients get reduced to zero, with some coefficients being nonzero. Volume (not cortex) has the coefficient with  the largest in magnitude, around index 300.
+```{r}
+lasso.estimates = coef(q3_2,s=q3_2$lambda.min)
+
+plot(lasso.estimates[2:329], col=labels)
+legend("topright",legend = levels(labels), fill = unique(labels), title = "Labels", cex = 0.5)
+```
+
+
+3.4. How many coefficients are not equal to 0?
+
+45 coefficients
+```{r}
+sum(lasso.estimates[2:329] != 0)
+```
+
+
+3.5. Which variable has the largest (in absolute value) coefficient at lambda.min? Transform the coefficient to the odds scale and interpret. 
+
+The odds ratio associated with Volume (WM Parcellation) of Left Hippocampus is 0.5800504. In other words, for a standard deviance increase of Volume (WM Parcellation) of Left Hippocampus, the odds of mild cognitive impairment diagnosis is 0.5800504 the original odds, holding all other covariates constant.
+```{r}
+q3_5 <- which.max(abs(lasso.estimates[-1]))
+colnames(x_matrix)[q3_5]
+exp(lasso.estimates[q3_5+1])
+```
+
+
+3.6. Now set the seed to 123 and re-run the cross-validation. Plot the mean deviance versus log lambda. Did the plot change? Did lambda.min change?
+
+Yes, it seems like the plot and lambda.min have changed. Lambda.min slightly increased.
+```{r}
+set.seed(123)
+q3_6 <- cv.glmnet(x_matrix, y, family = "binomial", alpha = 1, nfolds = 10)
+plot(q3_6)
+
+lasso.estimates2 = coef(q3_6,s=q3_6$lambda.min)
+plot(lasso.estimates2[2:329], col=labels)
+legend("bottomleft",legend = levels(labels), fill = unique(labels), title = "Labels", cex = 0.5)
+
+
+
+q3_6$lambda.min
+q3_2$lambda.min
+```
+
+
+3.7. If you used ridge regression and cross-validation, how many variables would be selected (i.e., have non-zero coefficients) at lambda.min? You don't need to fit the model. 
+All variables would be selected in ridge regrerssion because in ridge regression, the coefficients of the variables only approach zero, but they do not reach zero. 
+
+# Elastic Net.
+
+4.1. Fit the penalized glm with all predictors using the elastic net via $\texttt{glmnet}$. Choose the mixture of L1 and L2 penalties by setting $\alpha=0.5$. Create a plot using $\texttt{plot()}$. 
+```{r}
+q4_1 <- glmnet(x_matrix, y, family = "binomial", alpha = 0.5)
+plot(q4_1)
+```
+
+
+4.2. Now, perform 10-fold cross validation. To facilitate grading, set the seed to 777. Create a plot of the mean deviance versus log lambda from cross-validation. If necessary, adjust the values of lambda to result in a minimum that is in the interior of the range of lambda. 
+```{r}
+set.seed(777)
+q4_2 <- cv.glmnet(x_matrix, y, family = "binomial", alpha = 0.5, nfolds = 10)
+plot(q4_2)
+```
+
+
+4.3. Create a plot of the coefficients estimated using lambda.min versus index number, coloring by the labels. Exclude the intercept. How does it compare to the lasso?
+
+At a glance, it seems like there are slightly more nonzero coefficients. The overall magnitude of the coefficients is also smaller.
+```{r}
+lasso.estimates3 = coef(q4_2,s=q4_2$lambda.min)
+
+plot(lasso.estimates3[2:329], col=labels)
+legend("bottomleft",legend = levels(labels), fill = unique(labels), title = "Labels", cex = 0.5)
+```
+
+
+4.4. How many coefficients are not equal to 0?
+
+55 coefficients.
+```{r}
+sum(lasso.estimates3[2:329] != 0)
+```
+
+
+4.5. Create a plot of the coefficients estimated using lambda.1se versus index number, coloring by the labels. Do you notice any patterns? How does the plot compare to using lambda.min?
+
+Using lambda.1se, there are less nonzero coefficients and smaller magnitude of coefficient values compared to lambda.min.
+```{r}
+lasso.estimates4 = coef(q4_2,s=q4_2$lambda.1se)
+
+plot(lasso.estimates4[2:329], col=labels)
+legend("bottomleft",legend = levels(labels), fill = unique(labels), title = "Labels", cex = 0.5)
+```
+
+
+4.6. Which variable has the largest (in absolute value) coefficient at lambda.1se? Transform the coefficient to the odds scale and interpret.
+
+The odds ratio associated with Volume (WM Parcellation) of Left Hippocampus is 0.7815814. In other words, for a standard deviance increase of Volume (WM Parcellation) of Left Hippocampus, the odds of mild cognitive impairment diagnosis is 0.7815814 times the original odds, holding all other covariates constant.
+```{r}
+q4_6 <- which.max(abs(lasso.estimates4[-1]))
+colnames(x_matrix)[q4_6]
+exp(lasso.estimates4[q4_6+1])
+```
+
+
+4.7. What is the advantage of elastic net over the lasso? What is the advantage of elastic net over ridge? Answer this in two sentences using the lecture notes. 
+  
+Elastic net is a "middle ground" between L1 and L2, which means it incorporates some aspects of lasso and ridge. It has an advantage over just lasso in that it can shrink correlated covariates together, like ridge, and it has an advantage over just ridge in that it can shrink coefficients to zero, like lasso.
+
+4.8 Now fit a glm using only the variables selected by the elastic net with lambda.1se. Print the output of summary.
+```{r}
+# Extract variables selected by lambda.1se
+selected_variables <- which(abs(lasso.estimates4[-1]) != 0)
+x_selected <- x_matrix[, selected_variables]
+
+# Fit logistic regression model using selected variables
+q4_8 <- glm(y ~ ., data = as.data.frame(x_selected), family = "binomial")
+summary(q4_8)
+```
+
+
+4.9 Using the glm estimate, transform the coefficient corresponding to the variable in 4.6 to the odds scale and interpret. 
+
+The odds ratio associated with Volume (WM Parcellation) of Left Hippocampus is 0.4558735. In other words, for a standard deviance increase of Volume (WM Parcellation) of Left Hippocampus, the odds of mild cognitive impairment diagnosis is 0.4558735 times the original odds, holding all other covariates constant.
+```{r}
+exp(-0.78554)
+```
+
+
